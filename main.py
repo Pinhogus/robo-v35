@@ -4,7 +4,7 @@ import time
 # --- SEUS DADOS REAIS CONFIGURADOS ---
 TOKEN = "7955026793:AAFJUjGWEpm5BG_VHqsHRrQ4nDNroWT5Kz0" 
 CHAT_ID = "1027866106"
-# URL montada com a sua chave da API
+# URL correta para a sua chave
 URL_API = "https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey=9478a34c4d9fb4cc6d18861a304bdf18&regions=eu&markets=h2h&oddsFormat=decimal" 
 
 def enviar_mensagem(texto):
@@ -18,31 +18,33 @@ def enviar_mensagem(texto):
     try:
         requests.post(url, json=payload)
     except Exception as e:
-        print(f"Erro ao enviar Telegram: {e}")
+        print(f"Erro Telegram: {e}")
 
 def buscar_jogos():
     try:
-        response = requests.get(URL_API).json()
-        # Nota: O formato da resposta pode variar dependendo do plano da sua API
-        for jogo in response:
-            home = jogo.get('home_team')
-            away = jogo.get('away_team')
-            
-            # Como essa API foca em ODDS, para estatísticas em tempo real (ataques/chutes)
-            # você precisa garantir que seu plano contratado fornece dados 'live'
-            # Aqui aplicamos a lógica de links para a Irlanda que você pediu
-            
-            msg = (
-                f"🚀 **JOGO IDENTIFICADO**\n\n"
-                f"⚽ **{home} vs {away}**\n\n"
-                f"🇮🇪 **APOSTAR NA IRLANDA:**\n"
-                f"🟢 [Paddy Power Ao Vivo](https://www.paddypower.com/in-play/football)\n"
-                f"🟢 [Bet365 Ao Vivo](https://www.bet365.com/#/IP/)\n"
-                f"🟢 [Betfair Ao Vivo](https://www.betfair.com/sport/inplay)"
-            )
-            # Exemplo de envio (ajuste os filtros conforme os dados da sua API)
-            enviar_mensagem(msg)
-            break # Remova o break para processar todos os jogos
+        response = requests.get(URL_API)
+        data = response.json()
+        
+        # A The Odds API retorna uma LISTA direta de jogos
+        if isinstance(data, list):
+            for jogo in data:
+                home = jogo.get('home_team', 'N/A')
+                away = jogo.get('away_team', 'N/A')
+                liga = jogo.get('sport_title', 'Futebol')
+
+                msg = (
+                    f"🚀 **JOGO IDENTIFICADO**\n\n"
+                    f"⚽ **{home} vs {away}**\n"
+                    f"🏆 {liga}\n\n"
+                    f"🇮🇪 **APOSTAR NA IRLANDA:**\n"
+                    f"🟢 [Paddy Power Ao Vivo](https://www.paddypower.com/in-play/football)\n"
+                    f"🟢 [Bet365 Ao Vivo](https://www.bet365.com/#/IP/)"
+                )
+                enviar_mensagem(msg)
+                # Pausa pequena entre mensagens para não dar erro no Telegram
+                time.sleep(2) 
+        else:
+            print("Formato de dados inesperado")
 
     except Exception as e:
         print(f"Erro na leitura da API: {e}")
@@ -50,4 +52,5 @@ def buscar_jogos():
 print("Robô iniciado no Koyeb...")
 while True:
     buscar_jogos()
-    time.sleep(300) # Verifica a cada 5 minutos para economizar requisições da sua API
+    # Espera 10 minutos para não estourar seu limite de créditos da API
+    time.sleep(600) 
