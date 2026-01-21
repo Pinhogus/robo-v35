@@ -1,10 +1,11 @@
 import requests
 import time
 
-# --- COLOQUE SEUS DADOS AQUI ---
+# --- SEUS DADOS REAIS CONFIGURADOS ---
 TOKEN = "7955026793:AAFJUjGWEpm5BG_VHqsHRrQ4nDNroWT5Kz0" 
-CHAT_ID = "CHAT_ID = "1027866106"
-URL_API = "https://v3.football.api-sports.io/fixtures?team={team_id}&last=10" 
+CHAT_ID = "1027866106"
+# URL montada com a sua chave da API
+URL_API = "https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey=9478a34c4d9fb4cc6d18861a304bdf18&regions=eu&markets=h2h&oddsFormat=decimal" 
 
 def enviar_mensagem(texto):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -22,65 +23,31 @@ def enviar_mensagem(texto):
 def buscar_jogos():
     try:
         response = requests.get(URL_API).json()
-        # O caminho 'data' depende da sua API, ajuste se necessário
-        jogos = response.get('data', [])
-        
-        for jogo in jogos:
-            home = jogo.get('home_name')
-            away = jogo.get('away_name')
-            tempo = jogo.get('minute')
+        # Nota: O formato da resposta pode variar dependendo do plano da sua API
+        for jogo in response:
+            home = jogo.get('home_team')
+            away = jogo.get('away_team')
             
-            # Coleta de Estatísticas
-            stats = jogo.get('stats', {})
-            atq_p_h = stats.get('dangerous_attacks', {}).get('home', 0)
-            atq_p_a = stats.get('dangerous_attacks', {}).get('away', 0)
-            atq_perigosos = atq_p_h + atq_p_a
+            # Como essa API foca em ODDS, para estatísticas em tempo real (ataques/chutes)
+            # você precisa garantir que seu plano contratado fornece dados 'live'
+            # Aqui aplicamos a lógica de links para a Irlanda que você pediu
             
-            chutes_h = stats.get('on_target', {}).get('home', 0)
-            chutes_a = stats.get('on_target', {}).get('away', 0)
-            chutes_no_gol = chutes_h + chutes_a
-
-            fora_h = stats.get('off_target', {}).get('home', 0)
-            fora_a = stats.get('off_target', {}).get('away', 0)
-            chutes_fora = fora_h + fora_a
-            
-            cantos_h = stats.get('corners', {}).get('home', 0)
-            cantos_a = stats.get('corners', {}).get('away', 0)
-            total_cantos = cantos_h + cantos_a
-
-            placar_h = jogo.get('score', {}).get('home', 0)
-            placar_a = jogo.get('score', {}).get('away', 0)
-
-            # --- LÓGICA 1: GOLS HT (FILTRO DE 30 ATAQUES) ---
-            if 15 <= tempo <= 35 and (placar_h + placar_a == 0):
-                if atq_perigosos >= 30 and chutes_no_gol >= 2 and chutes_fora >= 4:
-                    msg = (
-                        f"🎯 **ALERTA: GOL HT (0x0)**\n\n"
-                        f"⚽ **{home} vs {away}**\n"
-                        f"🔥 Pressão: {atq_perigosos} Atq. Perigosos\n"
-                        f"🚀 Chutes: {chutes_no_gol} no alvo | {chutes_fora} fora\n\n"
-                        f"🇮🇪 **APOSTAR NA IRLANDA:**\n"
-                        f"🟢 [Paddy Power Ao Vivo](https://www.paddypower.com/in-play/football)\n"
-                        f"🟢 [Bet365 Ao Vivo](https://www.bet365.com/#/IP/)"
-                    )
-                    enviar_mensagem(msg)
-
-            # --- LÓGICA 2: ESCANTEIOS (ESTRATÉGIA FINAL) ---
-            if tempo >= 80 and (placar_h == placar_a):
-                msg = (
-                    f"🚩 **ALERTA: ESCANTEIO FINAL**\n\n"
-                    f"⚽ **{home} vs {away}**\n"
-                    f"⏰ Tempo: {tempo}' | Cantos: {total_cantos}\n\n"
-                    f"🇮🇪 [Paddy Power Ao Vivo](https://www.paddypower.com/in-play/football)\n"
-                    f"🟢 [Bet Betfair](https://www.betfair.com/sport/inplay)"
-                )
-                enviar_mensagem(msg)
+            msg = (
+                f"🚀 **JOGO IDENTIFICADO**\n\n"
+                f"⚽ **{home} vs {away}**\n\n"
+                f"🇮🇪 **APOSTAR NA IRLANDA:**\n"
+                f"🟢 [Paddy Power Ao Vivo](https://www.paddypower.com/in-play/football)\n"
+                f"🟢 [Bet365 Ao Vivo](https://www.bet365.com/#/IP/)\n"
+                f"🟢 [Betfair Ao Vivo](https://www.betfair.com/sport/inplay)"
+            )
+            # Exemplo de envio (ajuste os filtros conforme os dados da sua API)
+            enviar_mensagem(msg)
+            break # Remova o break para processar todos os jogos
 
     except Exception as e:
         print(f"Erro na leitura da API: {e}")
 
-# Loop principal
 print("Robô iniciado no Koyeb...")
 while True:
     buscar_jogos()
-    time.sleep(60)
+    time.sleep(300) # Verifica a cada 5 minutos para economizar requisições da sua API
