@@ -2,93 +2,150 @@ import requests
 import urllib.parse
 import time
 
-# --- CONFIGURAÇÕES ---
+# ================== CONFIGURAÇÕES ==================
+
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
 TOKEN_TELEGRAM = "7955026793:AAFJUjGWEpm5BG_VHqsHRrQ4nDNroWT5Kz0"
 CHAT_ID = "1027866106"
-HEADERS = {'x-apisports-key': API_KEY}
+
+HEADERS = {"x-apisports-key": API_KEY}
+
+# ================== VARIÁVEIS ==================
 
 historico_cantos = {}
-jogos_avisados_cantos = []
-jogos_avisados_gols = []
+historico_tempo = {}
+avisados = []
 
-def limpar_valor(valor):
-    if valor is None: return 0
-    try:
-        return int(float(str(valor).replace('%', '').strip()))
-    except: return 0
+# ================== FUNÇÕES ==================
 
-def verificar_historico_ht(team_id):
-    url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=10"
+def enviar_telegram(msg):
+    texto = urllib.parse.quote(msg)
+    url = (
+        f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+        f"?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown"
+    )
     try:
-        res = requests.get(url, headers=HEADERS, timeout=10).json()
-        jogos = res.get('response', [])
-        if not jogos: return 0
-        gols_ht = 0
+        requests.get(url, timeout=10)
+    except:
+        pass
+
+def limpar(valor):
+    try:
+        return int(valor)
+    except:
+        return 0
+
+def historico_ht(team_id):
+    try:
+        url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=10"
+        r = requests.get(url, headers=HEADERS, timeout=10).json()
+        jogos = r.get("response", [])
+        if not jogos:
+            return 0
+
+        gols = 0
         for j in jogos:
-            h_ht = j.get('score', {}).get('halftime', {}).get('home') or 0
-            a_ht = j.get('score', {}).get('halftime', {}).get('away') or 0
-            if (h_ht + a_ht) > 0: gols_ht += 1
-        return (gols_ht / len(jogos)) * 100
-    except: return 0
+            h = j["score"]["halftime"]["home"] or 0
+            a = j["score"]["halftime"]["away"] or 0
+            if h + a > 0:
+                gols += 1
 
-def enviar_telegram(mensagem):
-    texto = urllib.parse.quote(mensagem)
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown&disable_notification=false"
-    try: requests.get(url, timeout=10)
-    except: pass
+        return (gols / len(jogos)) * 100
+    except:
+        return 0
 
-print("🛰️ Robô Híbrido: Gols HT (Odd 1.50+) + Cantos Limite")
+def stats_jogo(fixture_id):
+    cantos = 0
+    chutes_gol = 0
+    try:
+        url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
+        r = requests.get(url, headers=HEADERS, timeout=10).json()
+        for team in r.get("response", []):
+            for s in team.get("statistics", []):
+                if s["type"] == "Corner Kicks":
+                    cantos += limpar(s["value"])
+                if s["type"] == "Shots on Goal":
+                    chutes_gol += limpar(s["value"])
+    except:
+        pass
+
+    return cantos, chutes_gol
+
+# ================== ROBÔ ==================
+
+print("🤖 ROBÔ GOL HT + CANTOS COM SCORE | ATIVO")
 
 while True:
     try:
-        url_live = "https://v3.football.api-sports.io/fixtures?live=all"
-        response = requests.get(url_live, headers=HEADERS, timeout=15).json()
-        jogos = response.get('response', [])
-        
-        print(f"📊 Varredura: {len(jogos)} jogos | {time.strftime('%H:%M:%S')}")
+        live_url = "https://v3.football.api-sports.io/fixtures?live=all"
+        live = requests.get(live_url, headers=HEADERS, timeout=15).json().get("response", [])
 
-        for fixture in jogos:
-            m_id = fixture['fixture']['id']
-            minuto = fixture.get('fixture', {}).get('status', {}).get('elapsed') or 0
-            g_h = fixture.get('goals', {}).get('home') or 0
-            g_a = fixture.get('goals', {}).get('away') or 0
-            
-            # --- ESTRATÉGIA GOLS HT (FILTRO ODD 1.50+) ---
-            # O filtro de tempo (minuto >= 18) garante que a odd já subiu para perto de 1.50
+        print(f"🔍 {len(live)} jogos ao vivo | {time.strftime('%H:%M:%S')}")
+
+        for f in live:
+            m_id = f["fixture"]["id"]
+            minuto = f["fixture"]["status"]["elapsed"] or 0
+            g_h = f["goals"]["home"] or 0
+            g_a = f["goals"]["away"] or 0
+
+            cantos, chutes = stats_jogo(m_id)
+
+            score = 0
+
+            # -------- SCORE CHUTES NO GOL --------
+            if chutes >= 2:
+                score += 2
+            if chutes >= 4:
+                score += 4
+
+            # -------- SCORE TEMPO + PLACAR --------
             if 18 <= minuto <= 35 and g_h == 0 and g_a == 0:
-                if m_id not in jogos_avisados_gols:
-                    id_h = fixture['teams']['home']['id']
-                    id_a = fixture['teams']['away']['id']
-                    
-                    perc_h = verificar_historico_ht(id_h)
-                    perc_a = verificar_historico_ht(id_a)
-                    
-                    if perc_h >= 70 or perc_a >= 70:
-                        msg = (f"⚽ *GOL HT: ODD 1.50+ ATINGIDA*\n\n"
-                               f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
-                               f"⏱️ Tempo: {minuto}' | 🥅 0x0\n"
-                               f"📊 Histórico HT: {max(perc_h, perc_a):.0f}% (Mínimo)\n"
-                               f"💰 Entrada sugerida: Over 0.5 HT\n"
-                               f"📲 [ABRIR BET365](https://www.bet365.com/#/IP/)")
-                        enviar_telegram(msg)
-                        jogos_avisados_gols.append(m_id)
+                score += 2
 
-            # --- ESTRATÉGIA CANTOS (MANTIDA) ---
-            if (35 <= minuto <= 45) or (80 <= minuto <= 90):
-                stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
-                stats_res = requests.get(stats_url, headers=HEADERS).json()
-                cantos = sum(limpar_valor(s.get('value')) for t in stats_res.get('response', []) for s in t.get('statistics', []) if s['type'] == 'Corner Kicks')
-                
-                if m_id in historico_cantos:
+            # -------- SCORE HISTÓRICO HT --------
+            h_id = f["teams"]["home"]["id"]
+            a_id = f["teams"]["away"]["id"]
+            hist = max(historico_ht(h_id), historico_ht(a_id))
+            if hist >= 70:
+                score += 2
+
+            # -------- SCORE CANTOS DINÂMICOS --------
+            if 25 <= minuto <= 45:
+                if m_id not in historico_cantos:
+                    historico_cantos[m_id] = cantos
+                    historico_tempo[m_id] = minuto
+                else:
                     dif = cantos - historico_cantos[m_id]
-                    if dif >= 2 and m_id not in jogos_avisados_cantos:
-                        msg = (f"🚩 *CANTO LIMITE*\n🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
-                               f"⏱️ {minuto}' | 🚩 +{dif} cantos\n"
-                               f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)")
-                        enviar_telegram(msg)
-                        jogos_avisados_cantos.append(m_id)
-                historico_cantos[m_id] = cantos
+                    tempo = minuto - historico_tempo[m_id]
 
-    except Exception as e: print(f"⚠️ Erro: {e}")
+                    if dif >= 2 and tempo <= 10:
+                        score += 3
+                    if dif >= 4:
+                        score += 5
+
+                    historico_cantos[m_id] = cantos
+                    historico_tempo[m_id] = minuto
+
+            # -------- DISPARO FINAL --------
+            if score >= 8 and m_id not in avisados:
+                msg = (
+                    f"🔥 *PRESSÃO ALTA ({score} pts)*\n\n"
+                    f"🏟 {f['teams']['home']['name']} x {f['teams']['away']['name']}\n"
+                    f"⏱ {minuto}' | {g_h}x{g_a}\n"
+                    f"🎯 Chutes no gol: {chutes}\n"
+                    f"🚩 Cantos: {cantos}\n"
+                    f"📊 Histórico HT: {hist:.0f}%\n\n"
+                    f"💰 Mercados:\n"
+                    f"- Over 0.5 HT\n"
+                    f"- Cantos ao vivo\n\n"
+                    f"🔗 Bet365:\nhttps://www.bet365.com/#/IP/\n\n"
+                    f"🔗 Alternativas (🇮🇪):\n"
+                    f"Betfair | Paddy Power | BoyleSports"
+                )
+                enviar_telegram(msg)
+                avisados.append(m_id)
+
+    except Exception as e:
+        print("⚠️ Erro:", e)
+
     time.sleep(120)
