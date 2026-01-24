@@ -64,7 +64,7 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
                     
-                    if perc_h >= 80 or perc_a >= 80:
+                    if perc_h >= 90 or perc_a >= 90:
                         msg = (f"⚽ *GOL HT: ODD 1.50+ ATINGIDA*\n\n"
                                f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ Tempo: {minuto}' | 🥅 0x0\n"
@@ -75,14 +75,14 @@ while True:
                         jogos_avisados_gols.append(m_id)
 
             # --- ESTRATÉGIA CANTOS (MANTIDA) ---
-            if (30 <= minuto <= 41) or (80 <= minuto <= 87):
+            if (30 <= minuto <= 41) or (80 <= minuto <= 85):
                 stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
                 stats_res = requests.get(stats_url, headers=HEADERS).json()
                 cantos = sum(limpar_valor(s.get('value')) for t in stats_res.get('response', []) for s in t.get('statistics', []) if s['type'] == 'Corner Kicks')
                 
                 if m_id in historico_cantos:
                     dif = cantos - historico_cantos[m_id]
-                    if dif >= 1 and m_id not in jogos_avisados_cantos:
+                    if dif >= 3 and m_id not in jogos_avisados_cantos:
                         msg = (f"🚩 *CANTO LIMITE*\n🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ {minuto}' | 🚩 +{dif} cantos\n"
                                f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)")
