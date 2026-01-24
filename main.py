@@ -1,80 +1,94 @@
 import requests
+import urllib.parse
 import time
 
 # --- CONFIGURAÇÕES ---
-TOKEN = "7955026793:AAFJUjGWEpm5BG_VHqsHRrQ4nDNroWT5Kz0" 
+API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
+TOKEN_TELEGRAM = "7955026793:AAFJUjGWEpm5BG_VHqsHRrQ4nDNroWT5Kz0"
 CHAT_ID = "1027866106"
-URL_API = "https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey=9478a34c4d9fb4cc6d18861a304bdf18&regions=eu&markets=h2h&oddsFormat=decimal" 
+HEADERS = {'x-apisports-key': API_KEY}
 
-def enviar_mensagem(texto):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": texto, "parse_mode": "Markdown", "disable_web_page_preview": False}
+historico_cantos = {}
+jogos_avisados_cantos = []
+jogos_avisados_gols = []
+
+def limpar_valor(valor):
+    if valor is None: return 0
     try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Erro Telegram: {e}")
+        return int(float(str(valor).replace('%', '').strip()))
+    except: return 0
 
-def buscar_oportunidades():
+def verificar_historico_ht(team_id):
+    url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=10"
     try:
-        response = requests.get(URL_API)
-        data = response.json()
-        
-        if isinstance(data, list):
-            for jogo in data:
-                home = jogo.get('home_team', 'N/A')
-                away = jogo.get('away_team', 'N/A')
-                
-                # Dados Live (Essenciais para o filtro funcionar)
-                stats = jogo.get('stats', {})
-                tempo = jogo.get('minute', 0)
-                p_h = jogo.get('score', {}).get('home', 0)
-                p_a = jogo.get('score', {}).get('away', 0)
-                
-                # --- 1. LÓGICA GOLS HT (22 MIN + 70% AMBOS) ---
-                # Requisito: A partir de 22min, 0x0, e histórico de 70% para os DOIS times
-                prob_h = jogo.get('home_stats', {}).get('ht_goal_prob', 0)
-                prob_a = jogo.get('away_stats', {}).get('ht_goal_prob', 0)
+        res = requests.get(url, headers=HEADERS, timeout=10).json()
+        jogos = res.get('response', [])
+        if not jogos: return 0
+        gols_ht = 0
+        for j in jogos:
+            h_ht = j.get('score', {}).get('halftime', {}).get('home') or 0
+            a_ht = j.get('score', {}).get('halftime', {}).get('away') or 0
+            if (h_ht + a_ht) > 0: gols_ht += 1
+        return (gols_ht / len(jogos)) * 100
+    except: return 0
 
-                if 22 <= tempo <= 38 and (p_h + p_a == 0):
-                    if prob_h >= 70 and prob_a >= 70:
-                        msg = (f"🎯 **GOL HT (ESTRATÉGIA 70% DUPLO)**\n⚽ {home} x {away}\n"
-                               f"⏱ Minuto: {tempo}'\n"
-                               f"📊 Prob HT: {home} {prob_h}% | {away} {prob_a}%\n"
-                               f"🇮🇪 [Paddy Power](https://www.paddypower.com/in-play/football)")
-                        enviar_mensagem(msg)
+def enviar_telegram(mensagem):
+    texto = urllib.parse.quote(mensagem)
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown&disable_notification=false"
+    try: requests.get(url, timeout=10)
+    except: pass
 
-                # --- 2. LÓGICA ESCANTEIOS (DIFERENÇA DE 10 ATAQUES) ---
-                atq_h = stats.get('dangerous_attacks', {}).get('home', 0)
-                atq_a = stats.get('dangerous_attacks', {}).get('away', 0)
-                dif_ataques = abs(atq_h - atq_a)
+print("🛰️ Robô Híbrido: Gols HT (Odd 1.50+) + Cantos Limite")
 
-                if tempo >= 80 and (p_h == p_a) and dif_ataques >= 10:
-                    msg = (f"🚩 **ESCANTEIO FINAL**\n⚽ {home} x {away}\n"
-                           f"⏰ {tempo}' | Dif. Ataques: {dif_ataques}\n"
-                           f"🇮🇪 [Bet365](https://www.bet365.com/#/IP/)")
-                    enviar_mensagem(msg)
-
-                # --- 3. FAVORITO PERDENDO (ODD < 1.80) ---
-                # Pega odds da primeira bookmaker disponível
-                bookmakers = jogo.get('bookmakers', [])
-                if bookmakers:
-                    outcomes = bookmakers[0].get('markets', [])[0].get('outcomes', [])
-                    odd_h = next((o['price'] for o in outcomes if o['name'] == home), 10)
-                    odd_a = next((o['price'] for o in outcomes if o['name'] == away), 10)
-
-                    if (odd_h <= 1.80 and p_a > p_h) or (odd_a <= 1.80 and p_h > p_a):
-                        msg = (f"🚨 **FAVORITO PERDENDO**\n⚽ {home} x {away}\n"
-                               f"📈 Odd Inicial: {min(odd_h, odd_a)}\n"
-                               f"🏆 Placar: {p_h}x{p_a}\n"
-                               f"🇮🇪 [Betfair](https://www.betfair.com/sport/inplay)")
-                        enviar_mensagem(msg)
-        else:
-            print("Monitorando jogos e buscando padrões...")
-
-    except Exception as e:
-        print(f"Erro na leitura: {e}")
-
-print("Robô Multi-Estratégia Avançado Iniciado!")
 while True:
-    buscar_oportunidades()
-    time.sleep(60) 
+    try:
+        url_live = "https://v3.football.api-sports.io/fixtures?live=all"
+        response = requests.get(url_live, headers=HEADERS, timeout=15).json()
+        jogos = response.get('response', [])
+        
+        print(f"📊 Varredura: {len(jogos)} jogos | {time.strftime('%H:%M:%S')}")
+
+        for fixture in jogos:
+            m_id = fixture['fixture']['id']
+            minuto = fixture.get('fixture', {}).get('status', {}).get('elapsed') or 0
+            g_h = fixture.get('goals', {}).get('home') or 0
+            g_a = fixture.get('goals', {}).get('away') or 0
+            
+            # --- ESTRATÉGIA GOLS HT (FILTRO ODD 1.50+) ---
+            # O filtro de tempo (minuto >= 18) garante que a odd já subiu para perto de 1.50
+            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+                if m_id not in jogos_avisados_gols:
+                    id_h = fixture['teams']['home']['id']
+                    id_a = fixture['teams']['away']['id']
+                    
+                    perc_h = verificar_historico_ht(id_h)
+                    perc_a = verificar_historico_ht(id_a)
+                    
+                    if perc_h >= 80 or perc_a >= 80:
+                        msg = (f"⚽ *GOL HT: ODD 1.50+ ATINGIDA*\n\n"
+                               f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
+                               f"⏱️ Tempo: {minuto}' | 🥅 0x0\n"
+                               f"📊 Histórico HT: {max(perc_h, perc_a):.0f}% (Mínimo)\n"
+                               f"💰 Entrada sugerida: Over 0.5 HT\n"
+                               f"📲 [ABRIR BET365](https://www.bet365.com/#/IP/)")
+                        enviar_telegram(msg)
+                        jogos_avisados_gols.append(m_id)
+
+            # --- ESTRATÉGIA CANTOS (MANTIDA) ---
+            if (30 <= minuto <= 41) or (80 <= minuto <= 87):
+                stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
+                stats_res = requests.get(stats_url, headers=HEADERS).json()
+                cantos = sum(limpar_valor(s.get('value')) for t in stats_res.get('response', []) for s in t.get('statistics', []) if s['type'] == 'Corner Kicks')
+                
+                if m_id in historico_cantos:
+                    dif = cantos - historico_cantos[m_id]
+                    if dif >= 1 and m_id not in jogos_avisados_cantos:
+                        msg = (f"🚩 *CANTO LIMITE*\n🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
+                               f"⏱️ {minuto}' | 🚩 +{dif} cantos\n"
+                               f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)")
+                        enviar_telegram(msg)
+                        jogos_avisados_cantos.append(m_id)
+                historico_cantos[m_id] = cantos
+
+    except Exception as e: print(f"⚠️ Erro: {e}")
+    time.sleep(120)
