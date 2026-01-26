@@ -91,4 +91,4 @@ while True:
                 historico_cantos[m_id] = cantos
 
     except Exception as e: print(f"⚠️ Erro: {e}")
-    time.sleep(180)
+    time.sleep(120)
