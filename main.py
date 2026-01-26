@@ -64,7 +64,7 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
                     
-                    if perc_h >= 90 or perc_a >= 90:
+                    if perc_h >= 70 or perc_a >= 70:
                         msg = (f"⚽ *GOL HT: ODD 1.50+ ATINGIDA*\n\n"
                                f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ Tempo: {minuto}' | 🥅 0x0\n"
