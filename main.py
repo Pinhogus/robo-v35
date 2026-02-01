@@ -4,7 +4,7 @@ from datetime import datetime
 
 # ================= CONFIGURAÇÕES =================
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSYHEADERS"
+TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
 CHAT_ID = "8418160843"
 Token for the bot Robo Gol ht 2.0 @Golsnoht_bot has been revoked. New token is:
 
