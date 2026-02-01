@@ -4,10 +4,9 @@ from datetime import datetime
 
 # ================= CONFIGURAÇÕES =================
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TOKEN_TELEGRAM = "8418160843:AAE99kJmKxSiAsnH4TViXOkPhl5excFkFjU"
+TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSYHEADERS"
 CHAT_ID = "8418160843"
-
-HEADERS = {"x-apisports-key": API_KEY}
+Token for the bot Robo Gol ht 2.0 @Golsnoht_bot has been revoked. New token is:
 
 # ================= TELEGRAM =================
 def telegram(msg):
