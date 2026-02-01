@@ -5,9 +5,9 @@ import csv
 from datetime import datetime
 
 # ================= CONFIGURAÇÕES =================
-API_KEY = "SUA_API_KEY"
-TOKEN_TELEGRAM = "SEU_TOKEN"
-CHAT_ID = "SEU_CHAT_ID"
+API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
+TELEGRAM_TOKEN = "8418160843:AAE99kJmKxSiAsnH4TViXOkPhl5excFkFjU"
+CHAT_ID = "8418160843"
 
 HEADERS = {'x-apisports-key': API_KEY}
 
@@ -201,4 +201,4 @@ while True:
     except Exception as e:
         print("Erro:", e)
 
-    time.sleep(180)
+    time.sleep(120)
