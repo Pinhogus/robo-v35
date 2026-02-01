@@ -1,204 +1,215 @@
 import requests
-import urllib.parse
 import time
-import csv
 from datetime import datetime
 
 # ================= CONFIGURAÇÕES =================
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TELEGRAM_TOKEN = "8418160843:AAE99kJmKxSiAsnH4TViXOkPhl5excFkFjU"
+TOKEN_TELEGRAM = "8418160843:AAE99kJmKxSiAsnH4TViXOkPhl5excFkFj"
 CHAT_ID = "8418160843"
 
-HEADERS = {'x-apisports-key': API_KEY}
+HEADERS = {"x-apisports-key": API_KEY}
 
-# ================= VARIÁVEIS =================
-jogos_avisados_gols = set()
-jogos_avisados_cantos = set()
-
-sinais_ativos = {}  # fixture_id -> dados do sinal
-resultados = []
-
-ultimo_dia = datetime.now().date()
-
-# ================= FUNÇÕES =================
-def enviar_telegram(msg):
-    texto = urllib.parse.quote(msg)
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown"
+# ================= TELEGRAM =================
+def telegram(msg):
     try:
-        requests.get(url, timeout=10)
+        requests.get(
+            f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage",
+            params={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"},
+            timeout=10
+        )
     except:
         pass
 
+# ================= VARIÁVEIS GERAIS =================
+ultimo_dia = datetime.now().date()
 
-def verificar_historico_ht(team_id):
-    url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=10"
+# ================= ROBÔ GOLS =================
+avisados_gols = set()
+sinais_gols = {}
+resultados_gols = []
+
+def historico_ht(team_id):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10).json()
-        jogos = r.get("response", [])
-        gols_ht = 0
-        for j in jogos:
-            h = j["score"]["halftime"]["home"] or 0
-            a = j["score"]["halftime"]["away"] or 0
-            if h + a > 0:
-                gols_ht += 1
-        return (gols_ht / len(jogos)) * 100 if jogos else 0
+        r = requests.get(
+            f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=10",
+            headers=HEADERS, timeout=10
+        ).json()["response"]
+        gols = sum(
+            1 for j in r
+            if (j["score"]["halftime"]["home"] or 0) +
+               (j["score"]["halftime"]["away"] or 0) > 0
+        )
+        return (gols / len(r)) * 100 if r else 0
     except:
         return 0
 
-
-def salvar_resultado_csv(d):
-    with open("resultados.csv", "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(d)
-
-
-def registrar_resultado(tipo, liga, pais, green):
+def registrar_gol(liga, pais, green):
     lucro = 0.5 if green else -1
-    dado = {
-        "tipo": tipo,
+    resultados_gols.append({
         "liga": liga,
         "pais": pais,
-        "resultado": "GREEN" if green else "RED",
+        "green": green,
         "lucro": lucro,
         "data": datetime.now()
-    }
-    resultados.append(dado)
+    })
 
-    salvar_resultado_csv([
-        tipo, liga, pais, dado["resultado"], lucro, dado["data"]
-    ])
-
-
-def resumo(periodo):
+def resumo_gols(periodo):
     agora = datetime.now()
     if periodo == "dia":
-        base = [r for r in resultados if r["data"].date() == agora.date()]
+        base = [r for r in resultados_gols if r["data"].date() == agora.date()]
     elif periodo == "semana":
-        base = [r for r in resultados if r["data"].isocalendar()[1] == agora.isocalendar()[1]]
+        base = [r for r in resultados_gols if r["data"].isocalendar()[1] == agora.isocalendar()[1]]
     else:
-        base = [r for r in resultados if r["data"].month == agora.month]
+        base = [r for r in resultados_gols if r["data"].month == agora.month]
 
     if not base:
         return
 
-    greens = sum(1 for r in base if r["resultado"] == "GREEN")
-    reds = sum(1 for r in base if r["resultado"] == "RED")
+    greens = sum(1 for r in base if r["green"])
+    reds = len(base) - greens
     lucro = sum(r["lucro"] for r in base)
     roi = (lucro / len(base)) * 100
 
-    enviar_telegram(
-        f"📊 *RESUMO {periodo.upper()}*\n\n"
+    telegram(
+        f"⚽ *RESUMO GOLS – {periodo.upper()}*\n\n"
         f"✅ Greens: {greens}\n"
         f"❌ Reds: {reds}\n"
         f"💰 Lucro: {lucro:.2f}u\n"
         f"📈 ROI: {roi:.1f}%"
     )
 
+# ================= ROBÔ CANTOS =================
+avisados_cantos = set()
+historico_cantos = {}
+resultados_cantos = []
 
-def ranking_ligas():
-    ranking = {}
+def registrar_canto(liga, pais, green):
+    lucro = 0.4 if green else -1
+    resultados_cantos.append({
+        "liga": liga,
+        "pais": pais,
+        "green": green,
+        "lucro": lucro,
+        "data": datetime.now()
+    })
 
-    for r in resultados:
-        chave = f"{r['pais']} - {r['liga']}"
-        ranking.setdefault(chave, {"greens": 0, "reds": 0, "lucro": 0})
+def resumo_cantos(periodo):
+    agora = datetime.now()
+    if periodo == "dia":
+        base = [r for r in resultados_cantos if r["data"].date() == agora.date()]
+    elif periodo == "semana":
+        base = [r for r in resultados_cantos if r["data"].isocalendar()[1] == agora.isocalendar()[1]]
+    else:
+        base = [r for r in resultados_cantos if r["data"].month == agora.month]
 
-        if r["resultado"] == "GREEN":
-            ranking[chave]["greens"] += 1
-        else:
-            ranking[chave]["reds"] += 1
+    if not base:
+        return
 
-        ranking[chave]["lucro"] += r["lucro"]
+    greens = sum(1 for r in base if r["green"])
+    reds = len(base) - greens
+    lucro = sum(r["lucro"] for r in base)
+    roi = (lucro / len(base)) * 100
 
-    linhas = []
-    for liga, d in ranking.items():
-        total = d["greens"] + d["reds"]
-        if total < 5:
-            continue
-        winrate = (d["greens"] / total) * 100
-        roi = (d["lucro"] / total) * 100
-        linhas.append((liga, total, winrate, roi))
+    telegram(
+        f"🚩 *RESUMO CANTOS – {periodo.upper()}*\n\n"
+        f"✅ Greens: {greens}\n"
+        f"❌ Reds: {reds}\n"
+        f"💰 Lucro: {lucro:.2f}u\n"
+        f"📈 ROI: {roi:.1f}%"
+    )
 
-    linhas.sort(key=lambda x: x[3], reverse=True)
-    return linhas
-
-
-# ================= LOOP PRINCIPAL =================
-print("🛰️ Robô ATIVO | GOLS HT + CANTOS + ROI + RANKING")
+# ================= INÍCIO =================
+print("🚀 Robô GOLS + CANTOS iniciado")
 
 while True:
     try:
-        live = requests.get(
+        jogos = requests.get(
             "https://v3.football.api-sports.io/fixtures?live=all",
-            headers=HEADERS,
-            timeout=15
-        ).json().get("response", [])
+            headers=HEADERS, timeout=15
+        ).json()["response"]
 
-        for f in live:
-            m_id = f["fixture"]["id"]
+        for f in jogos:
+            fid = f["fixture"]["id"]
             minuto = f["fixture"]["status"]["elapsed"] or 0
             status = f["fixture"]["status"]["short"]
 
-            g_h = f["goals"]["home"] or 0
-            g_a = f["goals"]["away"] or 0
+            gh = f["goals"]["home"] or 0
+            ga = f["goals"]["away"] or 0
 
             home = f["teams"]["home"]
             away = f["teams"]["away"]
             liga = f["league"]["name"]
             pais = f["league"]["country"]
 
-            # ---------- GOL HT ----------
-            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
-                if m_id not in jogos_avisados_gols:
-                    p_h = verificar_historico_ht(home["id"])
-                    p_a = verificar_historico_ht(away["id"])
-
-                    if p_h >= 80 or p_a >= 80:
-                        enviar_telegram(
+            # ========== GOLS HT ==========
+            if 22 <= minuto <= 35 and gh == 0 and ga == 0:
+                if fid not in avisados_gols:
+                    ph = historico_ht(home["id"])
+                    pa = historico_ht(away["id"])
+                    if ph >= 80 or pa >= 80:
+                        telegram(
                             f"⚽ *GOL HT*\n"
                             f"{home['name']} x {away['name']}\n"
                             f"{pais} – {liga}\n"
                             f"{minuto}' | 0x0\n"
-                            f"Histórico HT: {max(p_h, p_a):.0f}%"
+                            f"Histórico HT: {max(ph, pa):.0f}%"
                         )
-                        sinais_ativos[m_id] = {
-                            "tipo": "GOL_HT",
-                            "liga": liga,
-                            "pais": pais
-                        }
-                        jogos_avisados_gols.add(m_id)
+                        sinais_gols[fid] = {"liga": liga, "pais": pais}
+                        avisados_gols.add(fid)
 
-            # ---------- RESULTADO HT ----------
-            if status == "HT" and m_id in sinais_ativos:
-                s = sinais_ativos[m_id]
-                if s["tipo"] == "GOL_HT":
-                    registrar_resultado(
-                        "GOL_HT",
-                        s["liga"],
-                        s["pais"],
-                        g_h + g_a > 0
-                    )
-                    del sinais_ativos[m_id]
+            if status == "HT" and fid in sinais_gols:
+                registrar_gol(liga, pais, gh + ga > 0)
+                del sinais_gols[fid]
 
-        # ---------- RESUMO DIÁRIO ----------
+            # ========== CANTOS ==========
+            if fid not in historico_cantos:
+                historico_cantos[fid] = []
+
+            stats = requests.get(
+                f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fid}",
+                headers=HEADERS, timeout=10
+            ).json()["response"]
+
+            total_cantos = sum(
+                s["value"] or 0
+                for t in stats
+                for s in t["statistics"]
+                if s["type"] == "Corner Kicks"
+            )
+
+            historico_cantos[fid].append(total_cantos)
+            historico_cantos[fid] = historico_cantos[fid][-10:]
+
+            if fid not in avisados_cantos:
+                if (33 <= minuto <= 42) or (80 <= minuto <= 88):
+                    if len(historico_cantos[fid]) >= 2:
+                        if historico_cantos[fid][-1] - historico_cantos[fid][0] >= 3:
+                            telegram(
+                                f"🚩 *CANTOS*\n"
+                                f"{home['name']} x {away['name']}\n"
+                                f"{pais} – {liga}\n"
+                                f"{minuto}' | +3 cantos (10 min)"
+                            )
+                            avisados_cantos.add(fid)
+
+            if status == "FT" and fid in avisados_cantos:
+                registrar_canto(liga, pais, True)
+                avisados_cantos.remove(fid)
+
+        # ======== RESUMOS =========
         hoje = datetime.now().date()
         if hoje != ultimo_dia:
-            resumo("dia")
-            resumo("semana")
-            resumo("mes")
+            resumo_gols("dia")
+            resumo_gols("semana")
+            resumo_gols("mes")
 
-            ranking = ranking_ligas()
-            if ranking:
-                msg = "🏆 *RANKING LIGAS*\n\n"
-                for liga, total, win, roi in ranking[:5]:
-                    msg += (
-                        f"{liga}\n"
-                        f"Sinais: {total} | Win: {win:.1f}% | ROI: {roi:.1f}%\n\n"
-                    )
-                enviar_telegram(msg)
+            resumo_cantos("dia")
+            resumo_cantos("semana")
+            resumo_cantos("mes")
 
             ultimo_dia = hoje
 
     except Exception as e:
         print("Erro:", e)
 
-    time.sleep(120)
+    time.sleep(360)
