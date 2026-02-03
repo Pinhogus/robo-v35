@@ -74,7 +74,7 @@ while True:
                         enviar_telegram(msg)
                         jogos_avisados_gols.append(m_id)
 
-            # --- ESTRATÉGIA CANTOS (MANTIDA) ---
+              # --- ESTRATÉGIA CANTOS (MANTIDA) ---
             if (30 <= minuto <= 41) or (80 <= minuto <= 85):
                 stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
                 stats_res = requests.get(stats_url, headers=HEADERS).json()
@@ -82,7 +82,7 @@ while True:
                 
                 if m_id in historico_cantos:
                     dif = cantos - historico_cantos[m_id]
-                    if dif >= 1 and m_id not in jogos_avisados_cantos:
+                    if dif >= 3 and m_id not in jogos_avisados_cantos:
                         msg = (f"🚩 *CANTO LIMITE*\n🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ {minuto}' | 🚩 +{dif} cantos\n"
                                f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)")
@@ -91,4 +91,4 @@ while True:
                 historico_cantos[m_id] = cantos
 
     except Exception as e: print(f"⚠️ Erro: {e}")
-    time.sleep(180)
+    time.sleep(60)
