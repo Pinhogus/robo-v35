@@ -64,7 +64,7 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
                     
-                    if perc_h >= 80 or perc_a >= 80:
+                    if perc_h >= 70 or perc_a >= 70:
                         msg = (f"⚽ *GOL HT: ODD 1.50+ ATINGIDA*\n\n"
                                f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ Tempo: {minuto}' | 🥅 0x0\n"
@@ -82,7 +82,7 @@ while True:
                 
                 if m_id in historico_cantos:
                     dif = cantos - historico_cantos[m_id]
-                    if dif >= 3 and m_id not in jogos_avisados_cantos:
+                    if dif >= 1 and m_id not in jogos_avisados_cantos:
                         msg = (f"🚩 *CANTO LIMITE*\n🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ {minuto}' | 🚩 +{dif} cantos\n"
                                f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)")
