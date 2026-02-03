@@ -5,7 +5,7 @@ import time
 # --- CONFIGURAÇÕES ---
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
 TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
-CHAT_ID = "8418160843"
+CHAT_ID = "1027866106"
 HEADERS = {'x-apisports-key': API_KEY}
 
 historico_cantos = {}
@@ -91,4 +91,4 @@ while True:
                 historico_cantos[m_id] = cantos
 
     except Exception as e: print(f"⚠️ Erro: {e}")
-    time.sleep(300)
+    time.sleep(180)
