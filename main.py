@@ -64,7 +64,7 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
                     
-                    if perc_h >= 80 or perc_a >= 80:
+                    if perc_h >= 90 or perc_a >= 90:
                         msg = (f"⚽ *GOL HT: ODD 1.50+ ATINGIDA*\n\n"
                                f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
                                f"⏱️ Tempo: {minuto}' | 🥅 0x0\n"
@@ -129,4 +129,4 @@ if agora - ultimo_fetch_cantos[m_id] >= 150:
         print(f"⚠️ Erro cantos jogo {m_id}: {e}")
 
     except Exception as e: print(f"⚠️ Erro: {e}")
-    time.sleep(300)
+    time.sleep(420)
