@@ -74,46 +74,59 @@ while True:
                         enviar_telegram(msg)
                         jogos_avisados_gols.append(m_id)
 
-           # ========== ESTRATÉGIA CANTOS (NOVA) ==========
-if m_id not in historico_cantos:
-    historico_cantos[m_id] = []
+      # ========== ESTRATÉGIA CANTOS (SAFE CLOUD) ==========
+agora = time.time()
 
-# Buscar estatísticas
-stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
-stats_res = requests.get(stats_url, headers=HEADERS, timeout=10).json()
+# controla requisição (1 a cada 150s por jogo)
+if m_id not in ultimo_fetch_cantos:
+    ultimo_fetch_cantos[m_id] = 0
 
-total_cantos = sum(
-    limpar_valor(s.get('value'))
-    for t in stats_res.get('response', [])
-    for s in t.get('statistics', [])
-    if s.get('type') == 'Corner Kicks'
-)
+if agora - ultimo_fetch_cantos[m_id] >= 150:
+    try:
+        stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
+        stats_res = requests.get(stats_url, headers=HEADERS, timeout=10).json()
 
-# Salva (minuto, total_cantos)
-historico_cantos[m_id].append((minuto, total_cantos))
+        response_stats = stats_res.get("response", [])
+        if not response_stats:
+            raise Exception("Stats vazias")
 
-# Mantém apenas últimos 7 minutos
-historico_cantos[m_id] = [
-    (m, c) for m, c in historico_cantos[m_id]
-    if minuto - m <= 7
-]
+        total_cantos = 0
+        for team in response_stats:
+            for stat in team.get("statistics", []):
+                if stat.get("type") == "Corner Kicks":
+                    total_cantos += limpar_valor(stat.get("value"))
 
-# Verifica condição de tempo
-if (minuto >= 30 and minuto < 45) or (minuto >= 75):
-    if len(historico_cantos[m_id]) >= 2:
-        cantos_inicio = historico_cantos[m_id][0][1]
-        dif = total_cantos - cantos_inicio
+        ultimo_fetch_cantos[m_id] = agora
 
-        if dif >= 3 and m_id not in jogos_avisados_cantos:
-            msg = (
-                f"🚩 *CANTOS – PRESSÃO*\n\n"
-                f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
-                f"⏱️ {minuto}'\n"
-                f"🚩 +3 cantos nos últimos 7 minutos\n"
-                f"📲 [ABRIR BET365](https://www.bet365.com/#/IP/)"
-            )
-            enviar_telegram(msg)
-            jogos_avisados_cantos.add(m_id)
+        if m_id not in historico_cantos:
+            historico_cantos[m_id] = []
+
+        historico_cantos[m_id].append((minuto, total_cantos))
+
+        # mantém só últimos 7 minutos
+        historico_cantos[m_id] = [
+            (m, c) for m, c in historico_cantos[m_id]
+            if minuto - m <= 7
+        ]
+
+        # regra de tempo
+        if ((minuto >= 30 and minuto < 45) or minuto >= 75):
+            if len(historico_cantos[m_id]) >= 2:
+                dif = total_cantos - historico_cantos[m_id][0][1]
+
+                if dif >= 3 and m_id not in jogos_avisados_cantos:
+                    msg = (
+                        f"🚩 *CANTOS – PRESSÃO*\n\n"
+                        f"🏟️ {fixture['teams']['home']['name']} x {fixture['teams']['away']['name']}\n"
+                        f"⏱️ {minuto}'\n"
+                        f"🚩 +3 cantos nos últimos 7 minutos\n"
+                        f"📲 [ABRIR BET365](https://www.bet365.com/#/IP/)"
+                    )
+                    enviar_telegram(msg)
+                    jogos_avisados_cantos.add(m_id)
+
+    except Exception as e:
+        print(f"⚠️ Erro cantos jogo {m_id}: {e}")
 
     except Exception as e: print(f"⚠️ Erro: {e}")
     time.sleep(300)
