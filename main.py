@@ -55,12 +55,12 @@ while True:
             away_n = fixture['teams']['away']['name']
             
             # --- 1. ESTRATÉGIA GOLS HT ---
-            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+            if 20 <= minuto <= 26 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
                     perc_h = verificar_historico_ht(fixture['teams']['home']['id'])
                     perc_a = verificar_historico_ht(fixture['teams']['away']['id'])
                     
-                    if perc_h >= 90 or perc_a >= 90:
+                    if perc_h >= 80 or perc_a >= 80:
                         msg = (f"⚽ *GOL HT: ODD ALTA*\n\n🏟️ {home_n} x {away_n}\n"
                                f"⏱️ {minuto}' | 🥅 0x0\n📊 Histórico: {max(perc_h, perc_a):.0f}%\n"
                                f"📲 [BET365](https://www.bet365.com/#/IP/)")
@@ -70,7 +70,7 @@ while True:
             # --- 2. ESTRATÉGIA CANTOS (EQUIPE PERDENDO) ---
             if m_id not in jogos_avisados_cantos:
                 # Só busca estatísticas se o critério de tempo e placar for atingido
-                if (minuto <= 40 and (g_h != g_a)) or (45 < minuto <= 85 and (g_h != g_a)):
+                if (minuto <= 37 and (g_h != g_a)) or (45 < minuto <= 83 and (g_h != g_a)):
                     try:
                         stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
                         stats_res = requests.get(stats_url, headers=HEADERS, timeout=10).json()
