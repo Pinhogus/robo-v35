@@ -99,4 +99,4 @@ while True:
                     except: pass
 
     except Exception as e: print(f"⚠️ Erro Geral: {e}")
-    time.sleep(300) # Evita bloqueio de IP/Excesso de chamadas
+    time.sleep(480) # Evita bloqueio de IP/Excesso de chamadas
