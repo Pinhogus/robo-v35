@@ -194,6 +194,6 @@ def run():
                 process_game(g)
         except Exception as e:
             print("Erro:", e)
-        time.sleep(30)
+        time.sleep(180)
 
 run()
