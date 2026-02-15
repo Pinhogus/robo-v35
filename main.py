@@ -3,13 +3,14 @@ import urllib.parse
 import time
 
 # --- CONFIGURAÇÕES ---
-API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
-CHAT_ID = "1027866106"
+API_KEY = "SUA_API_KEY"
+TOKEN_TELEGRAM = "SEU_TOKEN"
+CHAT_ID = "SEU_CHAT_ID"
 HEADERS = {'x-apisports-key': API_KEY}
 
 jogos_avisados_cantos = []
 jogos_avisados_gols = []
+jogos_avisados_favorito = []  # NOVO
 
 def limpar_valor(valor):
     if valor is None: return 0
@@ -30,13 +31,34 @@ def verificar_historico_ht(team_id):
         return (gols_ht / len(jogos)) * 100
     except: return 0
 
+def verificar_favorito_pre_live(fixture_id):
+    try:
+        odds_url = f"https://v3.football.api-sports.io/odds?fixture={fixture_id}"
+        res = requests.get(odds_url, headers=HEADERS, timeout=10).json()
+        response = res.get("response", [])
+        
+        if not response:
+            return None
+        
+        bookmakers = response[0].get("bookmakers", [])
+        for book in bookmakers:
+            for bet in book.get("bets", []):
+                if bet["name"] == "Match Winner":
+                    for value in bet["values"]:
+                        odd = float(value["odd"])
+                        if odd <= 1.40:
+                            return value["value"]  # "Home" ou "Away"
+        return None
+    except:
+        return None
+
 def enviar_telegram(mensagem):
     texto = urllib.parse.quote(mensagem)
     url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown"
     try: requests.get(url, timeout=10)
     except: pass
 
-print("🛰️ Robô Híbrido: Gols HT + Cantos Pressão (Perdedor)")
+print("🛰️ Robô Híbrido: Gols HT + Cantos + Favorito em Risco")
 
 while True:
     try:
@@ -53,8 +75,41 @@ while True:
             g_a = fixture.get('goals', {}).get('away') or 0
             home_n = fixture['teams']['home']['name']
             away_n = fixture['teams']['away']['name']
-            
-            # --- 1. ESTRATÉGIA GOLS HT ---
+
+            # =========================================
+            # 1️⃣ FAVORITO PERDENDO OU SOFREU EMPATE
+            # =========================================
+            if m_id not in jogos_avisados_favorito and minuto >= 10:
+                favorito = verificar_favorito_pre_live(m_id)
+
+                if favorito:
+                    alerta = False
+                    
+                    if favorito == "Home":
+                        # Perdendo
+                        if g_h < g_a:
+                            alerta = True
+                        # Sofreu empate
+                        if g_h == g_a and g_h > 0:
+                            alerta = True
+                    elif favorito == "Away":
+                        if g_a < g_h:
+                            alerta = True
+                        if g_a == g_h and g_a > 0:
+                            alerta = True
+
+                    if alerta:
+                        msg = (f"🔥 *FAVORITO EM RISCO!*\n\n"
+                               f"🏟️ {home_n} {g_h}x{g_a} {away_n}\n"
+                               f"⏱️ {minuto}'\n"
+                               f"⭐ Favorito pré-live: {favorito}\n"
+                               f"📲 [BET365](https://www.bet365.com/#/IP/)")
+                        enviar_telegram(msg)
+                        jogos_avisados_favorito.append(m_id)
+
+            # =========================================
+            # 2️⃣ ESTRATÉGIA GOLS HT
+            # =========================================
             if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
                     perc_h = verificar_historico_ht(fixture['teams']['home']['id'])
@@ -67,9 +122,10 @@ while True:
                         enviar_telegram(msg)
                         jogos_avisados_gols.append(m_id)
 
-            # --- 2. ESTRATÉGIA CANTOS (EQUIPE PERDENDO) ---
+            # =========================================
+            # 3️⃣ ESTRATÉGIA CANTOS
+            # =========================================
             if m_id not in jogos_avisados_cantos:
-                # Só busca estatísticas se o critério de tempo e placar for atingido
                 if (minuto <= 40 and (g_h != g_a)) or (45 < minuto <= 85 and (g_h != g_a)):
                     try:
                         stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
@@ -81,10 +137,8 @@ while True:
                             c_a = next((s['value'] for s in st_resp[1]['statistics'] if s['type'] == 'Corner Kicks'), 0) or 0
                             
                             alerta = False
-                            # Lógica 1º Tempo (5+ cantos)
                             if minuto <= 40:
                                 if (g_h < g_a and c_h >= 5) or (g_a < g_h and c_a >= 5): alerta = True
-                            # Lógica 2º Tempo (10+ cantos)
                             elif 45 < minuto <= 85:
                                 if (g_h < g_a and c_h >= 10) or (g_a < g_h and c_a >= 10): alerta = True
                             
@@ -98,5 +152,7 @@ while True:
                                 jogos_avisados_cantos.append(m_id)
                     except: pass
 
-    except Exception as e: print(f"⚠️ Erro Geral: {e}")
-    time.sleep(300) # Evita bloqueio de IP/Excesso de chamadas
+    except Exception as e:
+        print(f"⚠️ Erro Geral: {e}")
+
+    time.sleep(300)
