@@ -1,120 +1,72 @@
 import requests
 import time
 
-API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
+# --- CONFIGURAÇÕES ---
+TOKEN = "7955026793:AAFJUjGWEpm5BG_VHqsHRrQ4nDNroWT5Kz0"
+CHAT_ID = "1027866106"
+API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18" # Sua chave da API-Football
+HEADERS = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
 
-HEADERS = {
-    "x-apisports-key": API_KEY
-}
+def enviar_telegram(mensagem):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
+    requests.post(url, json=payload)
 
-BASE_URL = "https://v3.football.api-sports.io"
-
-# ===============================
-# LOOP PRINCIPAL
-# ===============================
-
-while True:
-    print("\n==============================")
-    print("🔄 INICIANDO VARREDURA...")
-    print("==============================")
-
+def buscar_pressao_cantos():
     try:
-        # ===============================
-        # BUSCAR JOGOS AO VIVO
-        # ===============================
-        url_live = f"{BASE_URL}/fixtures?live=all"
+        # Busca jogos ao vivo
+        url = "https://v3.football.api-sports.io/fixtures?live=all"
+        response = requests.get(url, headers=HEADERS).json()
+        
+        for jogo in response.get('response', []):
+            fixture_id = jogo['fixture']['id']
+            tempo = jogo['fixture']['status']['elapsed']
+            home = jogo['teams']['home']['name']
+            away = jogo['teams']['away']['name']
+            gols_h = jogo['goals']['home']
+            gols_a = jogo['goals']['away']
 
-        res = requests.get(url_live, headers=HEADERS, timeout=15)
+            # Busca estatísticas detalhadas do jogo
+            url_stats = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
+            stats_data = requests.get(url_stats, headers=HEADERS).json()
+            
+            if not stats_data.get('response'): continue
 
-        print("STATUS CODE LIVE:", res.status_code)
+            # Extração de Cantos
+            stats_h = stats_data['response'][0]['statistics']
+            stats_a = stats_data['response'][1]['statistics']
+            cantos_h = next((s['value'] for s in stats_h if s['type'] == 'Corner Kicks'), 0) or 0
+            cantos_a = next((s['value'] for s in stats_a if s['type'] == 'Corner Kicks'), 0) or 0
 
-        if res.status_code != 200:
-            print("❌ ERRO NA API LIVE:", res.text)
+            disparar = False
+            motivo = ""
 
-        response = res.json()
+            # LÓGICA 1: Perdendo com 5+ cantos até os 40min (1º Tempo)
+            if tempo <= 40:
+                if gols_h < gols_a and cantos_h >= 5:
+                    disparar, motivo = True, f"🔥 {home} perdendo com {cantos_h} cantos!"
+                elif gols_a < gols_h and cantos_a >= 5:
+                    disparar, motivo = True, f"🔥 {away} perdendo com {cantos_a} cantos!"
 
-        if "errors" in response and response["errors"]:
-            print("🚨 ERRO DETECTADO:", response["errors"])
+            # LÓGICA 2: Perdendo com 10+ cantos até os 85min (2º Tempo)
+            elif 45 < tempo <= 85:
+                if gols_h < gols_a and cantos_h >= 10:
+                    disparar, motivo = True, f"🚀 {home} perdendo com {cantos_h} cantos!"
+                elif gols_a < gols_h and cantos_a >= 10:
+                    disparar, motivo = True, f"🚀 {away} perdendo com {cantos_a} cantos!"
 
-        jogos = response.get("response", [])
-
-        print(f"📊 Varredura LIVE: {len(jogos)} jogos encontrados")
-
-        # ===============================
-        # LOOP DOS JOGOS
-        # ===============================
-        for jogo in jogos:
-
-            fixture_id = jogo["fixture"]["id"]
-            minuto = jogo["fixture"]["status"]["elapsed"]
-
-            home = jogo["teams"]["home"]["name"]
-            away = jogo["teams"]["away"]["name"]
-
-            gols_home = jogo["goals"]["home"]
-            gols_away = jogo["goals"]["away"]
-
-            print(f"\n⚽ {home} {gols_home} x {gols_away} {away} | {minuto} min")
-
-            # ===============================
-            # BUSCAR ODDS PRÉ LIVE
-            # ===============================
-            try:
-                url_odds = f"{BASE_URL}/odds?fixture={fixture_id}"
-                res_odds = requests.get(url_odds, headers=HEADERS, timeout=15)
-
-                if res_odds.status_code != 200:
-                    print("❌ ERRO ODDS:", res_odds.text)
-                    continue
-
-                odds_data = res_odds.json()
-                bookmakers = odds_data.get("response", [])
-
-                if not bookmakers:
-                    continue
-
-                markets = bookmakers[0]["bookmakers"][0]["bets"]
-
-                favorito = None
-                odd_favorito = None
-
-                for market in markets:
-                    if market["name"] == "Match Winner":
-                        for odd in market["values"]:
-                            if odd["odd"] is not None:
-                                if odd_favorito is None or float(odd["odd"]) < odd_favorito:
-                                    favorito = odd["value"]
-                                    odd_favorito = float(odd["odd"])
-
-                if not favorito or not odd_favorito:
-                    continue
-
-                print(f"⭐ Favorito: {favorito} @ {odd_favorito}")
-
-            except Exception as e:
-                print("🚨 ERRO AO BUSCAR ODDS:", e)
-                continue
-
-            # ===============================
-            # ESTRATÉGIA FAVORITO PERDENDO
-            # ===============================
-            try:
-                if odd_favorito <= 1.40:
-
-                    if favorito == home and gols_home < gols_away:
-                        print("🚨 ALERTA: FAVORITO PERDENDO (HOME)")
-                    
-                    elif favorito == away and gols_away < gols_home:
-                        print("🚨 ALERTA: FAVORITO PERDENDO (AWAY)")
-
-                    elif gols_home == gols_away:
-                        print("⚠️ FAVORITO EMPATANDO")
-
-            except Exception as e:
-                print("🚨 ERRO NA ESTRATÉGIA:", e)
-
+            if disparar:
+                msg = (f"🚩 **SINAL DE CANTOS**\n\n"
+                       f"⚽ {home} {gols_h} x {gols_a} {away}\n"
+                       f"⏰ Tempo: {tempo}'\n"
+                       f"📊 {motivo}\n\n"
+                       f"🇮🇪 [Paddy Power Ao Vivo](https://www.paddypower.com/in-play/football)")
+                enviar_telegram(msg)
+                
     except Exception as e:
-        print("🚨 ERRO GERAL NA VARREDURA:", e)
+        print(f"Erro: {e}")
 
-    print("\n⏳ Aguardando 300 segundos...")
-    time.sleep(300)
+print("Robô de Cantos (API-Football) Iniciado...")
+while True:
+    buscar_pressao_cantos()
+    time.sleep(180) # Verifica a cada 2 minutos
