@@ -63,9 +63,14 @@ print("🛰️ Robô Híbrido: Gols HT + Cantos + Favorito em Risco")
 while True:
     try:
         url_live = "https://v3.football.api-sports.io/fixtures?live=all"
-        response = requests.get(url_live, headers=HEADERS, timeout=15).json()
-        jogos = response.get('response', [])
-        
+
+res = requests.get(url_live, headers=HEADERS, timeout=15)
+
+print("STATUS CODE:", res.status_code)
+print("RESPOSTA BRUTA:", res.text)
+
+response = res.json()
+jogos = response.get('response', [])        
         print(f"📊 Varredura: {len(jogos)} jogos | {time.strftime('%H:%M:%S')}")
 
         for fixture in jogos:
