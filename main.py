@@ -1,7 +1,7 @@
 import requests
 import time
 
-API_KEY = "SUA_API_KEY_AQUI"
+API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
 
 HEADERS = {
     "x-apisports-key": API_KEY
