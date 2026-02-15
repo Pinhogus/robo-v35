@@ -1,198 +1,102 @@
 import requests
+import urllib.parse
 import time
-from datetime import datetime, timedelta
 
-# =========================
-# 🔑 CONFIGURAÇÕES
-# =========================
+# --- CONFIGURAÇÕES ---
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
 TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
 CHAT_ID = "1027866106"
 HEADERS = {'x-apisports-key': API_KEY}
 
-# =========================
-# ⚽ TIMES MONITORADOS (seus times fortes)
-# =========================
-STRONG_TEAMS = [
-    "Manchester City","Arsenal","Liverpool","Manchester United","Chelsea","Tottenham",
-    "Paris Saint-Germain","Lyon","Lens",
-    "Inter","Juventus","AC Milan","Napoli","Atalanta","Roma","Como",
-    "Bayern Munich","Borussia Dortmund","RB Leipzig","Bayer Leverkusen",
-    "Real Madrid","Barcelona","Atletico Madrid",
-    "Benfica","Porto","Sporting",
-    "Union Saint-Gilloise",
-    "Flamengo","Palmeiras","Atletico Mineiro","Sao Paulo","Corinthians",
-    "Fluminense","Gremio","Internacional",
-    "River Plate","Boca Juniors","Racing",
-    "Al-Hilal","Al-Nassr","Al-Ittihad","Al-Ahli"
-]
+jogos_avisados_cantos = []
+jogos_avisados_gols = []
 
-# =========================
-# 📊 CACHE DE HISTÓRICO
-# =========================
-TEAM_HISTORY = {}  # Estatísticas históricas
-ALERTED = {}      # Jogos já notificados
+def limpar_valor(valor):
+    if valor is None: return 0
+    try: return int(float(str(valor).replace('%', '').strip()))
+    except: return 0
 
-# =========================
-# 📩 TELEGRAM
-# =========================
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
+def verificar_historico_ht(team_id):
+    url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=10"
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=10).json()
+        jogos = res.get('response', [])
+        if not jogos: return 0
+        gols_ht = 0
+        for j in jogos:
+            h_ht = j.get('score', {}).get('halftime', {}).get('home') or 0
+            a_ht = j.get('score', {}).get('halftime', {}).get('away') or 0
+            if (h_ht + a_ht) > 0: gols_ht += 1
+        return (gols_ht / len(jogos)) * 100
+    except: return 0
 
-# =========================
-# 📊 HISTÓRICO DE 15 JOGOS
-# =========================
-def get_team_history(team_id):
-    url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&last=15"
-    r = requests.get(url, headers=HEADERS)
-    games = r.json().get("response", [])
+def enviar_telegram(mensagem):
+    texto = urllib.parse.quote(mensagem)
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown"
+    try: requests.get(url, timeout=10)
+    except: pass
 
-    lost_first = 0
-    reacted = 0
-    wins = 0
-    draws = 0
+print("🛰️ Robô Híbrido: Gols HT + Cantos Pressão (Perdedor)")
 
-    for g in games:
-        home = g["teams"]["home"]["id"] == team_id
-        goals_for = g["goals"]["home"] if home else g["goals"]["away"]
-        goals_against = g["goals"]["away"] if home else g["goals"]["home"]
+while True:
+    try:
+        url_live = "https://v3.football.api-sports.io/fixtures?live=all"
+        response = requests.get(url_live, headers=HEADERS, timeout=15).json()
+        jogos = response.get('response', [])
+        
+        print(f"📊 Varredura: {len(jogos)} jogos | {time.strftime('%H:%M:%S')}")
 
-        halftime = g["score"]["halftime"]
-        ht_for = halftime["home"] if home else halftime["away"]
-        ht_against = halftime["away"] if home else halftime["home"]
+        for fixture in jogos:
+            m_id = fixture['fixture']['id']
+            minuto = fixture.get('fixture', {}).get('status', {}).get('elapsed') or 0
+            g_h = fixture.get('goals', {}).get('home') or 0
+            g_a = fixture.get('goals', {}).get('away') or 0
+            home_n = fixture['teams']['home']['name']
+            away_n = fixture['teams']['away']['name']
+            
+            # --- 1. ESTRATÉGIA GOLS HT ---
+            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+                if m_id not in jogos_avisados_gols:
+                    perc_h = verificar_historico_ht(fixture['teams']['home']['id'])
+                    perc_a = verificar_historico_ht(fixture['teams']['away']['id'])
+                    
+                    if perc_h >= 90 or perc_a >= 90:
+                        msg = (f"⚽ *GOL HT: ODD ALTA*\n\n🏟️ {home_n} x {away_n}\n"
+                               f"⏱️ {minuto}' | 🥅 0x0\n📊 Histórico: {max(perc_h, perc_a):.0f}%\n"
+                               f"📲 [BET365](https://www.bet365.com/#/IP/)")
+                        enviar_telegram(msg)
+                        jogos_avisados_gols.append(m_id)
 
-        if ht_for < ht_against:
-            lost_first += 1
-            if goals_for >= goals_against:
-                reacted += 1
-                if goals_for > goals_against:
-                    wins += 1
-                else:
-                    draws += 1
+            # --- 2. ESTRATÉGIA CANTOS (EQUIPE PERDENDO) ---
+            if m_id not in jogos_avisados_cantos:
+                # Só busca estatísticas se o critério de tempo e placar for atingido
+                if (minuto <= 40 and (g_h != g_a)) or (45 < minuto <= 85 and (g_h != g_a)):
+                    try:
+                        stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
+                        stats_res = requests.get(stats_url, headers=HEADERS, timeout=10).json()
+                        st_resp = stats_res.get("response", [])
+                        
+                        if len(st_resp) >= 2:
+                            c_h = next((s['value'] for s in st_resp[0]['statistics'] if s['type'] == 'Corner Kicks'), 0) or 0
+                            c_a = next((s['value'] for s in st_resp[1]['statistics'] if s['type'] == 'Corner Kicks'), 0) or 0
+                            
+                            alerta = False
+                            # Lógica 1º Tempo (5+ cantos)
+                            if minuto <= 40:
+                                if (g_h < g_a and c_h >= 5) or (g_a < g_h and c_a >= 5): alerta = True
+                            # Lógica 2º Tempo (10+ cantos)
+                            elif 45 < minuto <= 85:
+                                if (g_h < g_a and c_h >= 10) or (g_a < g_h and c_a >= 10): alerta = True
+                            
+                            if alerta:
+                                msg = (f"🚩 *CANTOS: PRESSÃO DO PERDEDOR*\n\n"
+                                       f"🏟️ {home_n} {g_h}x{g_a} {away_n}\n"
+                                       f"⏱️ {minuto}' | 🚩 Cantos: {c_h}x{c_a}\n"
+                                       f"🚨 Equipe perdendo está pressionando!\n"
+                                       f"📲 [BET365](https://www.bet365.com/#/IP/)")
+                                enviar_telegram(msg)
+                                jogos_avisados_cantos.append(m_id)
+                    except: pass
 
-    rate = round((reacted / lost_first) * 100, 1) if lost_first > 0 else 0
-    return lost_first, reacted, wins, draws, rate
-
-# =========================
-# 🟢🟡🔴 CLASSIFICAÇÃO DE CONFIANÇA
-# =========================
-def classify(rate):
-    if rate >= 65: return "ALTA 🟢"
-    if rate >= 40: return "MÉDIA 🟡"
-    return "BAIXA 🔴"
-
-# =========================
-# 🌐 PRÉ-LIVE: FAVORITOS COM ODDS ≤ 1,40 HOJE E SÁBADO
-# =========================
-def get_pre_live_games():
-    games_to_check = []
-    today = datetime.utcnow().date()
-    saturday = today + timedelta((5 - today.weekday()) % 7)  # Próximo sábado
-
-    for day in [today, saturday]:
-        date_str = day.strftime("%Y-%m-%d")
-        url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
-        r = requests.get(url, headers=HEADERS)
-        fixtures = r.json().get("response", [])
-        for f in fixtures:
-            for side in ["home", "away"]:
-                team = f["teams"][side]["name"]
-                team_id = f["teams"][side]["id"]
-                if team not in STRONG_TEAMS:
-                    # aqui incluímos **favoritos de ligas importantes**
-                    continue
-                # Odds pré-live
-                odds = f.get("odds", [])
-                for o in odds:
-                    if o["bookmaker"]["name"].lower() == "bet365":  # exemplo
-                        odd_value = o["bets"][0]["values"][0]["odd"]
-                        if odd_value <= 1.40:
-                            games_to_check.append(f)
-    return games_to_check
-
-# =========================
-# ⚽ JOGOS AO VIVO
-# =========================
-def get_live_games():
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
-    r = requests.get(url, headers=HEADERS)
-    return r.json().get("response", [])
-
-# =========================
-# 🧠 PROCESSAR JOGO AO VIVO
-# =========================
-def process_game(game):
-    fixture_id = game["fixture"]["id"]
-    minute = game["fixture"]["status"]["elapsed"]
-
-    for side in ["home", "away"]:
-        team = game["teams"][side]["name"]
-        team_id = game["teams"][side]["id"]
-
-        if team not in STRONG_TEAMS:
-            continue
-
-        goals_for = game["goals"][side]
-        goals_against = game["goals"]["away" if side == "home" else "home"]
-
-        if minute is None or minute < 20:
-            continue
-
-        losing = goals_for < goals_against
-        draw_after_goal = goals_for == goals_against and goals_for > 0 and minute >= 46
-        zero_zero_alert = goals_for == 0 and goals_against == 0 and minute <= 65 and minute >= 46
-
-        if not (losing or draw_after_goal or zero_zero_alert):
-            continue
-
-        # Histórico
-        if team_id not in TEAM_HISTORY:
-            TEAM_HISTORY[team_id] = get_team_history(team_id)
-        lost_first, reacted, wins, draws, rate = TEAM_HISTORY[team_id]
-        confidence = classify(rate)
-
-        # Níveis L1/L2/L3
-        stats = {s.get("type"): s.get("value") for s in game.get("statistics", [{}])[0].get("statistics", [])}
-        shots = int(stats.get("Shots on Goal", 0) or 0)
-        possession = stats.get("Ball Possession", "0%").replace("%","")
-        possession = int(possession) if possession.isdigit() else 0
-
-        level = ""
-        if possession >= 55 and shots >= 3: level = "🟡 L1"
-        if possession >= 60 and shots >= 5: level = "🟠 L2"
-        if shots >= 7 and minute < 75: level = "🔴 L3"
-
-        key = f"{fixture_id}_{team}_{minute}"
-        if key in ALERTED:
-            continue
-        ALERTED[key] = True
-
-        send_telegram(
-            f"{level} ALERTA DE FAVORITO\n\n"
-            f"{team}\n"
-            f"Placar: {goals_for}-{goals_against}\n"
-            f"Minuto: {minute}\n\n"
-            f"📊 Histórico (últimos 15 jogos):\n"
-            f"Saiu perdendo: {lost_first}x\n"
-            f"Reagiu: {reacted}x\n"
-            f"Viradas: {wins} | Empates: {draws}\n"
-            f"Taxa de reação: {rate}%\n"
-            f"Confiança: {confidence}"
-        )
-
-# =========================
-# ▶️ LOOP PRINCIPAL
-# =========================
-def run():
-    send_telegram("🤖 Bot Favoritos Completo Pré-Live + Ao Vivo ATIVO")
-    while True:
-        try:
-            live_games = get_live_games()
-            for g in live_games:
-                process_game(g)
-        except Exception as e:
-            print("Erro:", e)
-        time.sleep(180)
-
-run()
+    except Exception as e: print(f"⚠️ Erro Geral: {e}")
+    time.sleep(300) # Evita bloqueio de IP/Excesso de chamadas
