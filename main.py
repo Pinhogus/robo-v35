@@ -76,12 +76,12 @@ while True:
             away_n = fixture["teams"]["away"]["name"]
 
             # --- 1. ESTRATÉGIA GOLS HT ---
-            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+            if 18 <= minuto <= 35 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
                     perc_h = verificar_historico_ht(fixture["teams"]["home"]["id"])
                     perc_a = verificar_historico_ht(fixture["teams"]["away"]["id"])
 
-                    if perc_h >= 90 or perc_a >= 90:
+                    if perc_h >= 70 or perc_a >= 70:
                         msg = (
                             f"⚽ *GOL HT: ODD ALTA*\n\n"
                             f"🏟️ {home_n} x {away_n}\n"
