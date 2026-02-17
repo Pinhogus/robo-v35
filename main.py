@@ -4,7 +4,7 @@ import time
 
 # --- CONFIGURAÇÕES ---
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TOKEN_TELEGRAM = "SEU_TOKEN_AQUI"
+TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
 CHAT_ID = "1027866106"
 
 HEADERS = {
@@ -19,7 +19,7 @@ def limpar_valor(valor):
     if valor is None:
         return 0
     try:
-        return int(float(str(valor).replace('%', '').strip()))
+        return int(float(str(valor]).replace('%', '').strip()))
     except:
         return 0
 
@@ -57,7 +57,7 @@ def enviar_telegram(mensagem):
         pass
 
 
-print("🛰️ Robô Híbrido: Gols HT + Cantos Pressão (Perdedor)")
+print("🛰️ Robô Híbrido: Gols HT + Cantos 5/10")
 
 while True:
     try:
@@ -68,99 +68,94 @@ while True:
         print(f"📊 Varredura: {len(jogos)} jogos | {time.strftime('%H:%M:%S')}")
 
         for fixture in jogos:
+
             m_id = fixture["fixture"]["id"]
             minuto = fixture.get("fixture", {}).get("status", {}).get("elapsed") or 0
             g_h = fixture.get("goals", {}).get("home") or 0
             g_a = fixture.get("goals", {}).get("away") or 0
-            home_n = fixture["teams"]["home"]["name"]
-            away_n = fixture["teams"]["away"]["name"]
 
-            # --- 1. ESTRATÉGIA GOLS HT ---
-            if 18 <= minuto <= 35 and g_h == 0 and g_a == 0:
+            home = fixture["teams"]["home"]["name"]
+            away = fixture["teams"]["away"]["name"]
+
+            liga = fixture["league"]["name"]
+            pais = fixture["league"]["country"]
+
+            # ===============================
+            # 1️⃣ ESTRATÉGIA GOLS HT (MANTIDA)
+            # ===============================
+            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
-                    perc_h = verificar_historico_ht(fixture["teams"]["home"]["id"])
-                    perc_a = verificar_historico_ht(fixture["teams"]["away"]["id"])
 
-                    if perc_h >= 70 or perc_a >= 70:
+                    id_h = fixture["teams"]["home"]["id"]
+                    id_a = fixture["teams"]["away"]["id"]
+
+                    perc_h = verificar_historico_ht(id_h)
+                    perc_a = verificar_historico_ht(id_a)
+
+                    if perc_h >= 80 or perc_a >= 80:
                         msg = (
-                            f"⚽ *GOL HT: ODD ALTA*\n\n"
-                            f"🏟️ {home_n} x {away_n}\n"
+                            f"⚽ *GOL HT: ODD 1.50+*\n\n"
+                            f"🌍 {pais} | {liga}\n"
+                            f"🏟️ {home} x {away}\n"
                             f"⏱️ {minuto}' | 🥅 0x0\n"
                             f"📊 Histórico: {max(perc_h, perc_a):.0f}%\n"
-                            f"📲 [BET365](https://www.bet365.com/#/IP/)"
+                            f"📲 [ABRIR BET365](https://www.bet365.com/#/IP/)"
                         )
+
                         enviar_telegram(msg)
                         jogos_avisados_gols.append(m_id)
 
-            # --- 2. ESTRATÉGIA CANTOS (EQUIPE PERDENDO) ---
+            # ===============================
+            # 2️⃣ NOVA ESTRATÉGIA CANTOS 5 / 10
+            # ===============================
             if m_id not in jogos_avisados_cantos:
 
-                if (
-                    (minuto <= 40 and g_h != g_a)
-                    or (45 < minuto <= 85 and g_h != g_a)
-                ):
-                    try:
-                        stats_url = (
-                            f"https://v3.football.api-sports.io/"
-                            f"fixtures/statistics?fixture={m_id}"
-                        )
-                        stats_res = requests.get(
-                            stats_url, headers=HEADERS, timeout=10
-                        ).json()
+                try:
+                    stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
+                    stats_res = requests.get(stats_url, headers=HEADERS, timeout=10).json()
+                    stats = stats_res.get("response", [])
 
-                        st_resp = stats_res.get("response", [])
+                    if len(stats) >= 2:
 
-                        if len(st_resp) >= 2:
-                            c_h = next(
-                                (
-                                    s["value"]
-                                    for s in st_resp[0]["statistics"]
-                                    if s["type"] == "Corner Kicks"
-                                ),
-                                0,
-                            ) or 0
+                        c_h = next(
+                            (s["value"] for s in stats[0]["statistics"] if s["type"] == "Corner Kicks"),
+                            0
+                        ) or 0
 
-                            c_a = next(
-                                (
-                                    s["value"]
-                                    for s in st_resp[1]["statistics"]
-                                    if s["type"] == "Corner Kicks"
-                                ),
-                                0,
-                            ) or 0
+                        c_a = next(
+                            (s["value"] for s in stats[1]["statistics"] if s["type"] == "Corner Kicks"),
+                            0
+                        ) or 0
 
-                            alerta = False
+                        alerta = False
 
-                            # 1º Tempo (5+ cantos)
-                            if minuto <= 40:
-                                if (g_h < g_a and c_h >= 5) or (
-                                    g_a < g_h and c_a >= 5
-                                ):
-                                    alerta = True
+                        # 1º TEMPO
+                        if minuto <= 45:
+                            if c_h >= 5 or c_a >= 5:
+                                alerta = True
 
-                            # 2º Tempo (10+ cantos)
-                            elif 45 < minuto <= 85:
-                                if (g_h < g_a and c_h >= 10) or (
-                                    g_a < g_h and c_a >= 10
-                                ):
-                                    alerta = True
+                        # 2º TEMPO
+                        elif minuto > 45:
+                            if c_h >= 10 or c_a >= 10:
+                                alerta = True
 
-                            if alerta:
-                                msg = (
-                                    f"🚩 *CANTOS: PRESSÃO DO PERDEDOR*\n\n"
-                                    f"🏟️ {home_n} {g_h}x{g_a} {away_n}\n"
-                                    f"⏱️ {minuto}' | 🚩 Cantos: {c_h}x{c_a}\n"
-                                    f"🚨 Equipe perdendo está pressionando!\n"
-                                    f"📲 [BET365](https://www.bet365.com/#/IP/)"
-                                )
+                        if alerta:
+                            msg = (
+                                f"🚩 *ALERTA CANTOS 5/10*\n\n"
+                                f"🌍 {pais} | {liga}\n"
+                                f"🏟️ {home} {g_h}x{g_a} {away}\n"
+                                f"⏱️ {minuto}'\n"
+                                f"🚩 Cantos: {c_h} x {c_a}\n"
+                                f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)"
+                            )
 
-                                enviar_telegram(msg)
-                                jogos_avisados_cantos.append(m_id)
+                            enviar_telegram(msg)
+                            jogos_avisados_cantos.append(m_id)
 
-                    except:
-                        pass
+                except Exception as e:
+                    print("Erro Cantos:", e)
 
     except Exception as e:
         print(f"⚠️ Erro Geral: {e}")
 
-    time.sleep(180)
+    time.sleep(120)
