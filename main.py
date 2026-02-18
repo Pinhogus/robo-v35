@@ -3,8 +3,8 @@ import time
 
 # ===== CONFIGURAÇÕES =====
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TELEGRAM_TOKEN = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
-CHAT_ID = "1027866106I"
+TELEGRAM_TOKEN = "8418160843:AAElU7KJsdQ0MtzhP8"
+CHAT_ID = "1027866106"
 
 HEADERS = {
     "x-apisports-key": API_KEY
@@ -34,15 +34,18 @@ def buscar_estatisticas(fixture_id):
     response = requests.get(url, headers=HEADERS)
     return response.json()["response"]
 
-def extrair(stat_list, tipo):
+# ===== EXTRAÇÃO FLEXÍVEL =====
+def extrair(stat_list, palavra_chave):
     for s in stat_list:
-        if s["type"] == tipo:
+        if palavra_chave.lower() in s["type"].lower():
             return int(s["value"] or 0)
     return 0
 
-# ===== LÓGICA =====
+# ===== LÓGICA PRINCIPAL =====
 def analisar_jogos():
     jogos = buscar_jogos_ao_vivo()
+
+    print(f"\nJogos ao vivo encontrados: {len(jogos)}")
 
     for jogo in jogos:
         fixture_id = jogo["fixture"]["id"]
@@ -55,31 +58,48 @@ def analisar_jogos():
         gols_casa = jogo["goals"]["home"]
         gols_fora = jogo["goals"]["away"]
 
-        if tempo == "1H" and 15 <= minuto <= 28 and gols_casa == 0 and gols_fora == 0:
+        print(f"\nAnalisando jogo ID {fixture_id} | Minuto: {minuto} | Tempo: {tempo} | Placar: {gols_casa}x{gols_fora}")
+
+        if tempo == "1H" and minuto is not None and 15 <= minuto <= 25 and gols_casa == 0 and gols_fora == 0:
+
+            print(">> Passou no filtro principal")
 
             stats = buscar_estatisticas(fixture_id)
+
             if len(stats) < 2:
+                print(">> Estatísticas insuficientes")
                 continue
 
             time1 = stats[0]
             time2 = stats[1]
 
-            ataques1 = extrair(time1["statistics"], "Dangerous Attacks")
-            final1 = extrair(time1["statistics"], "Shots on Goal")
-            esc1 = extrair(time1["statistics"], "Corner Kicks")
+            print("Tipos de estatísticas disponíveis:")
+            print([s["type"] for s in time1["statistics"]])
 
-            ataques2 = extrair(time2["statistics"], "Dangerous Attacks")
-            final2 = extrair(time2["statistics"], "Shots on Goal")
-            esc2 = extrair(time2["statistics"], "Corner Kicks")
+            ataques1 = extrair(time1["statistics"], "danger")
+            final1 = extrair(time1["statistics"], "shot on")
+            esc1 = extrair(time1["statistics"], "corner")
+
+            ataques2 = extrair(time2["statistics"], "danger")
+            final2 = extrair(time2["statistics"], "shot on")
+            esc2 = extrair(time2["statistics"], "corner")
 
             total_ataques = ataques1 + ataques2
+            total_final = final1 + final2
 
-            # CRITÉRIO VOLUME
+            print(f"Ataques: {ataques1} x {ataques2}")
+            print(f"Finalizações no gol: {final1} x {final2}")
+            print(f"Escanteios: {esc1} x {esc2}")
+
+            # CRITÉRIO SUPER LEVE PARA TESTE
             condicao = (
-                (ataques1 >= 6 and final1 >= 1 and esc1 >= 1) or
-                (ataques2 >= 6 and final2 >= 1 and esc2 >= 1) or
-                (total_ataques >= 12)
+                ataques1 >= 8 or
+                ataques2 >= 8 or
+                total_ataques >= 15 or
+                total_final >= 1
             )
+
+            print("Condição:", condicao)
 
             if condicao:
 
@@ -89,7 +109,7 @@ def analisar_jogos():
                 time_fora = jogo["teams"]["away"]["name"]
 
                 mensagem = f"""
-🚨 <b>OVER 0.5 HT - VOLUME</b>
+🚨 <b>OVER 0.5 HT - DEBUG TESTE</b>
 
 🏆 {liga} - {pais}
 ⚔️ {time_casa} x {time_fora}
@@ -104,13 +124,13 @@ def analisar_jogos():
 
                 enviar_telegram(mensagem)
                 jogos_enviados.add(fixture_id)
-                print("Sinal enviado!")
+                print("🚨 SINAL ENVIADO!")
 
 # ===== LOOP =====
 while True:
     try:
         analisar_jogos()
-        time.sleep(18caf0)
+        time.sleep(60)
     except Exception as e:
         print("Erro:", e)
-        time.sleep(180)
+        time.sleep(60)
