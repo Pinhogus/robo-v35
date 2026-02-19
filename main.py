@@ -3,9 +3,9 @@ import urllib.parse
 import time
 
 # --- CONFIGURAÇÕES ---
-API_KEY = "SUA_API_KEY"
-TOKEN_TELEGRAM = "SEU_TOKEN"
-CHAT_ID = "SEU_CHAT_ID"
+API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
+TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
+CHAT_ID = "1027866106"
 
 HEADERS = {
     "x-apisports-key": API_KEY
@@ -83,7 +83,7 @@ while True:
             # ===============================
             # 1️⃣ ESTRATÉGIA GOLS HT (MANTIDA)
             # ===============================
-            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+            if 18 <= minuto <= 30 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
 
                     id_h = fixture["teams"]["home"]["id"]
@@ -92,7 +92,7 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
 
-                    if perc_h >= 80 or perc_a >= 80:
+                    if perc_h >= 70 or perc_a >= 70:
                         msg = (
                             f"⚽ *GOL HT: ODD 1.50+*\n\n"
                             f"🌍 {pais} | {liga}\n"
@@ -130,12 +130,12 @@ while True:
                         alerta = False
 
                         # 1º TEMPO
-                        if minuto <= 45:
+                        if minuto <= 42:
                             if c_h >= 5 or c_a >= 5:
                                 alerta = True
 
                         # 2º TEMPO
-                        elif minuto > 45:
+                        elif minuto > 42:
                             if c_h >= 10 or c_a >= 10:
                                 alerta = True
 
