@@ -19,7 +19,7 @@ def limpar_valor(valor):
     if valor is None:
         return 0
     try:
-        return int(float(str(valor]).replace('%', '').strip()))
+        return int(float(str(valor).replace('%', '').strip()))
     except:
         return 0
 
