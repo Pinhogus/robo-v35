@@ -3,9 +3,9 @@ import urllib.parse
 import time
 
 # --- CONFIGURAÇÕES ---
-API_KEY = "SUA_API_KEY"
-TOKEN_TELEGRAM = "SEU_TOKEN"
-CHAT_ID = "SEU_CHAT_ID"
+API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
+TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
+CHAT_ID = "1027866106"
 
 HEADERS = {
     "x-apisports-key": API_KEY
