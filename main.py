@@ -3,9 +3,9 @@ import urllib.parse
 import time
 
 # --- CONFIGURAÇÕES ---
-API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
-CHAT_ID = "1027866106"
+API_KEY = "SUA_API_KEY"
+TOKEN_TELEGRAM = "SEU_TOKEN"
+CHAT_ID = "SEU_CHAT_ID"
 
 HEADERS = {
     "x-apisports-key": API_KEY
@@ -14,6 +14,10 @@ HEADERS = {
 jogos_avisados_cantos = []
 jogos_avisados_gols = []
 
+
+# ===============================
+# FUNÇÕES AUXILIARES
+# ===============================
 
 def limpar_valor(valor):
     if valor is None:
@@ -57,7 +61,7 @@ def enviar_telegram(mensagem):
         pass
 
 
-print("🛰️ Robô Híbrido: Gols HT + Cantos 5/10")
+print("🛰️ Robô Híbrido Avançado: Gols HT + Estatísticas + Cantos")
 
 while True:
     try:
@@ -80,10 +84,11 @@ while True:
             liga = fixture["league"]["name"]
             pais = fixture["league"]["country"]
 
-            # ===============================
-            # 1️⃣ ESTRATÉGIA GOLS HT (MANTIDA)
-            # ===============================
-            if 18 <= minuto <= 30 and g_h == 0 and g_a == 0:
+            # =====================================================
+            # 🔥 1️⃣ ESTRATÉGIA GOL HT + ESTATÍSTICAS AO VIVO
+            # =====================================================
+
+            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
 
                     id_h = fixture["teams"]["home"]["id"]
@@ -92,22 +97,49 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
 
-                    if perc_h >= 70 or perc_a >= 70:
-                        msg = (
-                            f"⚽ *GOL HT: ODD 1.50+*\n\n"
-                            f"🌍 {pais} | {liga}\n"
-                            f"🏟️ {home} x {away}\n"
-                            f"⏱️ {minuto}' | 🥅 0x0\n"
-                            f"📊 Histórico: {max(perc_h, perc_a):.0f}%\n"
-                            f"📲 [ABRIR BET365](https://www.bet365.com/#/IP/)"
-                        )
+                    if perc_h >= 80 or perc_a >= 80:
 
-                        enviar_telegram(msg)
-                        jogos_avisados_gols.append(m_id)
+                        # Buscar estatísticas ao vivo
+                        stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
+                        stats_res = requests.get(stats_url, headers=HEADERS, timeout=10).json()
+                        stats = stats_res.get("response", [])
 
-            # ===============================
-            # 2️⃣ NOVA ESTRATÉGIA CANTOS 5 / 10
-            # ===============================
+                        if len(stats) >= 2:
+
+                            def get_stat(stat_name):
+                                h = next((s["value"] for s in stats[0]["statistics"] if s["type"] == stat_name), 0)
+                                a = next((s["value"] for s in stats[1]["statistics"] if s["type"] == stat_name), 0)
+                                return limpar_valor(h) + limpar_valor(a)
+
+                            shots_on = get_stat("Shots on Goal")
+                            shots_total = get_stat("Total Shots")
+                            ataques_perigosos = get_stat("Dangerous Attacks")
+
+                            # FILTRO INTELIGENTE
+                            if shots_on >= 3 and shots_total >= 8 and ataques_perigosos >= 20:
+
+                                msg = (
+                                    f"🔥 *GOL HT FORTE*\n\n"
+                                    f"🌍 {pais} | {liga}\n"
+                                    f"🏟️ {home} x {away}\n"
+                                    f"⏱️ {minuto}' | 🥅 0x0\n"
+                                    f"📊 Histórico HT: {max(perc_h, perc_a):.0f}%\n\n"
+                                    f"🎯 Chutes no alvo: {shots_on}\n"
+                                    f"🥅 Finalizações: {shots_total}\n"
+                                    f"⚡ Ataques perigosos: {ataques_perigosos}\n\n"
+                                    f"📊 SofaScore:\n"
+                                    f"https://www.sofascore.com/\n\n"
+                                    f"📲 Bet365 AO VIVO:\n"
+                                    f"https://www.bet365.com/#/IP/"
+                                )
+
+                                enviar_telegram(msg)
+                                jogos_avisados_gols.append(m_id)
+
+            # =====================================================
+            # 🚩 2️⃣ ESTRATÉGIA CANTOS 5 / 10 (MANTIDA)
+            # =====================================================
+
             if m_id not in jogos_avisados_cantos:
 
                 try:
@@ -117,25 +149,19 @@ while True:
 
                     if len(stats) >= 2:
 
-                        c_h = next(
-                            (s["value"] for s in stats[0]["statistics"] if s["type"] == "Corner Kicks"),
-                            0
-                        ) or 0
+                        def get_stat(stat_name):
+                            h = next((s["value"] for s in stats[0]["statistics"] if s["type"] == stat_name), 0)
+                            a = next((s["value"] for s in stats[1]["statistics"] if s["type"] == stat_name), 0)
+                            return limpar_valor(h), limpar_valor(a)
 
-                        c_a = next(
-                            (s["value"] for s in stats[1]["statistics"] if s["type"] == "Corner Kicks"),
-                            0
-                        ) or 0
+                        c_h, c_a = get_stat("Corner Kicks")
 
                         alerta = False
 
-                        # 1º TEMPO
-                        if minuto <= 42:
+                        if minuto <= 45:
                             if c_h >= 5 or c_a >= 5:
                                 alerta = True
-
-                        # 2º TEMPO
-                        elif minuto > 42:
+                        else:
                             if c_h >= 10 or c_a >= 10:
                                 alerta = True
 
@@ -145,8 +171,9 @@ while True:
                                 f"🌍 {pais} | {liga}\n"
                                 f"🏟️ {home} {g_h}x{g_a} {away}\n"
                                 f"⏱️ {minuto}'\n"
-                                f"🚩 Cantos: {c_h} x {c_a}\n"
-                                f"📲 [ABRIR AO VIVO](https://www.bet365.com/#/IP/)"
+                                f"🚩 Cantos: {c_h} x {c_a}\n\n"
+                                f"📲 Bet365 AO VIVO:\n"
+                                f"https://www.bet365.com/#/IP/"
                             )
 
                             enviar_telegram(msg)
