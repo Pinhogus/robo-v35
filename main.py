@@ -88,7 +88,7 @@ while True:
             # 🔥 1️⃣ ESTRATÉGIA GOL HT + ESTATÍSTICAS AO VIVO
             # =====================================================
 
-            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+            if 18 <= minuto <= 35 and g_h == 0 and g_a == 0:
                 if m_id not in jogos_avisados_gols:
 
                     id_h = fixture["teams"]["home"]["id"]
@@ -97,7 +97,7 @@ while True:
                     perc_h = verificar_historico_ht(id_h)
                     perc_a = verificar_historico_ht(id_a)
 
-                    if perc_h >= 80 or perc_a >= 80:
+                    if perc_h >= 70 or perc_a >= 70:
 
                         # Buscar estatísticas ao vivo
                         stats_url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={m_id}"
@@ -116,7 +116,7 @@ while True:
                             ataques_perigosos = get_stat("Dangerous Attacks")
 
                             # FILTRO INTELIGENTE
-                            if shots_on >= 3 and shots_total >= 8 and ataques_perigosos >= 20:
+                            if shots_on >= 2 and shots_total >= 4 and ataques_perigosos >= 15:
 
                                 msg = (
                                     f"🔥 *GOL HT FORTE*\n\n"
