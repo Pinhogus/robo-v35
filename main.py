@@ -109,7 +109,7 @@ while True:
             # GOL HT
             # ===============================
 
-            if 22 <= minuto <= 35 and g_h == 0 and g_a == 0:
+            if 18 <= minuto <= 35 and g_h == 0 and g_a == 0:
 
                 if m_id not in jogos_avisados_gols:
 
@@ -166,7 +166,7 @@ while True:
                                 alerta = True
 
                         elif minuto > 45:
-                            if c_h >= 10 or c_a >= 10:
+                            if c_h >= 8 or c_a >= 8:
                                 alerta = True
 
                         if alerta:
