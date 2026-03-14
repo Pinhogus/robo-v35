@@ -1,151 +1,163 @@
 import requests
 import time
 import urllib.parse
+from datetime import date
 
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
-TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
+
+TELEGRAM_TOKEN = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
 CHAT_ID = "1027866106"
 
 HEADERS = {
     "x-apisports-key": API_KEY
 }
 
-jogos_alertados = set()
+favoritos = {}
+alertas = []
 
+# ------------------------
+# TELEGRAM
+# ------------------------
 
-def enviar_telegram(msg):
+def enviar(msg):
 
     texto = urllib.parse.quote(msg)
 
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={CHAT_ID}&text={texto}&parse_mode=Markdown"
 
-    try:
-        requests.get(url, timeout=10)
-    except:
-        pass
+    requests.get(url)
 
 
-def pegar_odds(fixture_id):
+# ------------------------
+# PEGAR FAVORITOS
+# ------------------------
 
-    url = f"https://v3.football.api-sports.io/odds?fixture={fixture_id}"
+def buscar_favoritos():
 
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=10).json()
+    hoje = date.today()
 
-        bookmakers = r["response"][0]["bookmakers"]
+    print("🔎 Buscando odds do dia...")
 
-        for b in bookmakers:
+    url = f"https://v3.football.api-sports.io/odds?date={hoje}"
 
-            if b["name"] == "Bet365":
+    res = requests.get(url, headers=HEADERS).json()
 
-                for bet in b["bets"]:
+    jogos = res["response"]
 
-                    if bet["name"] == "Match Winner":
+    for jogo in jogos:
 
-                        odds = bet["values"]
+        fixture = jogo["fixture"]["id"]
 
-                        home_odd = float(odds[0]["odd"])
-                        away_odd = float(odds[2]["odd"])
+        for book in jogo["bookmakers"]:
 
-                        return home_odd, away_odd
+            for bet in book["bets"]:
 
-    except:
-        return None, None
+                if bet["name"] == "Match Winner":
 
-    return None, None
+                    home_odd = float(bet["values"][0]["odd"])
+                    draw_odd = float(bet["values"][1]["odd"])
+                    away_odd = float(bet["values"][2]["odd"])
+
+                    home = bet["values"][0]["value"]
+                    away = bet["values"][2]["value"]
+
+                    if home_odd <= 1.60:
+
+                        favoritos[fixture] = {
+                            "team": home,
+                            "odd": home_odd
+                        }
+
+                    if away_odd <= 1.60:
+
+                        favoritos[fixture] = {
+                            "team": away,
+                            "odd": away_odd
+                        }
+
+                    break
+
+            break
+
+    print("⭐ Favoritos encontrados:", len(favoritos))
 
 
-print("🤖 Robô favorito perdendo iniciado")
+# ------------------------
+# MONITORAR LIVE
+# ------------------------
 
-while True:
+def monitorar():
 
-    try:
+    while True:
 
         url = "https://v3.football.api-sports.io/fixtures?live=all"
 
-        response = requests.get(url, headers=HEADERS, timeout=15).json()
+        res = requests.get(url, headers=HEADERS).json()
 
-        jogos = response.get("response", [])
+        jogos = res["response"]
 
-        print(f"📊 {len(jogos)} jogos ao vivo")
+        print("📊 Jogos ao vivo:", len(jogos))
 
         for jogo in jogos:
 
-            fixture_id = jogo["fixture"]["id"]
+            fixture = jogo["fixture"]["id"]
 
-            if fixture_id in jogos_alertados:
+            if fixture not in favoritos:
                 continue
-
-            minuto = jogo["fixture"]["status"]["elapsed"] or 0
 
             home = jogo["teams"]["home"]["name"]
             away = jogo["teams"]["away"]["name"]
 
-            g_home = jogo["goals"]["home"] or 0
-            g_away = jogo["goals"]["away"] or 0
+            gols_home = jogo["goals"]["home"] or 0
+            gols_away = jogo["goals"]["away"] or 0
 
-            liga = jogo["league"]["name"]
-            pais = jogo["league"]["country"]
+            minuto = jogo["fixture"]["status"]["elapsed"]
 
-            home_odd, away_odd = pegar_odds(fixture_id)
+            favorito = favoritos[fixture]["team"]
+            odd = favoritos[fixture]["odd"]
 
-            if home_odd is None:
+            if fixture in alertas:
                 continue
 
-            favorito = None
+            if favorito == home and gols_away > gols_home:
 
-            if home_odd <= 1.60:
-                favorito = "home"
+                enviar_alerta(home, away, minuto, gols_home, gols_away, favorito, odd)
+                alertas.append(fixture)
 
-            elif away_odd <= 1.60:
-                favorito = "away"
+            if favorito == away and gols_home > gols_away:
 
-            if favorito == "home" and g_home < g_away:
+                enviar_alerta(home, away, minuto, gols_home, gols_away, favorito, odd)
+                alertas.append(fixture)
 
-                msg = f"""
+        time.sleep(180)
+
+
+# ------------------------
+# ALERTA
+# ------------------------
+
+def enviar_alerta(home, away, minuto, gh, ga, favorito, odd):
+
+    msg = f"""
 🚨 FAVORITO PERDENDO
 
-🌍 {pais} | {liga}
-
-🏟️ {home} x {away}
+⚽ {home} vs {away}
 
 ⏱️ {minuto}'
-⚽ Placar: {g_home} x {g_away}
+📊 {gh}-{ga}
 
-⭐ Favorito: {home}
-Odd pré-jogo: {home_odd}
+⭐ Favorito: {favorito}
+Odd pré-jogo: {odd}
 
-https://www.bet365.com/#/IP/
+🔥 Possível pressão do favorito
 """
 
-                enviar_telegram(msg)
+    enviar(msg)
 
-                jogos_alertados.add(fixture_id)
 
-            if favorito == "away" and g_away < g_home:
+# ------------------------
+# EXECUTAR
+# ------------------------
 
-                msg = f"""
-🚨 FAVORITO PERDENDO
-
-🌍 {pais} | {liga}
-
-🏟️ {home} x {away}
-
-⏱️ {minuto}'
-⚽ Placar: {g_home} x {g_away}
-
-⭐ Favorito: {away}
-Odd pré-jogo: {away_odd}
-
-https://www.bet365.com/#/IP/
-"""
-
-                enviar_telegram(msg)
-
-                jogos_alertados.add(fixture_id)
-
-    except Exception as e:
-
-        print("Erro:", e)
-
-    time.sleep(120)
+buscar_favoritos()
+monitorar()
