@@ -1,7 +1,7 @@
 import requests
 import time
+import urllib.parse
 
-# --- CONFIGURAÇÕES ---
 API_KEY = "9478a34c4d9fb4cc6d18861a304bdf18"
 TOKEN_TELEGRAM = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
 CHAT_ID = "1027866106"
@@ -10,78 +10,142 @@ HEADERS = {
     "x-apisports-key": API_KEY
 }
 
-ALERTA_CHUTES = 3
-
-# guarda jogos que já enviaram alerta
 jogos_alertados = set()
 
-# --- TELEGRAM ---
+
 def enviar_telegram(msg):
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": msg
-    }
-    requests.post(url, data=payload)
 
-# --- PEGAR JOGOS AO VIVO ---
-def jogos_ao_vivo():
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
-    response = requests.get(url, headers=HEADERS)
-    data = response.json()
-    return data["response"]
+    texto = urllib.parse.quote(msg)
 
-# --- PEGAR ESTATISTICAS ---
-def estatisticas_jogo(fixture_id):
-    url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
-    response = requests.get(url, headers=HEADERS)
-    data = response.json()
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={texto}"
 
-    shots1 = 0
-    shots2 = 0
-
-    if data["response"]:
-        for team in data["response"]:
-            for stat in team["statistics"]:
-                if stat["type"] == "Shots on Goal":
-                    if shots1 == 0:
-                        shots1 = stat["value"] or 0
-                    else:
-                        shots2 = stat["value"] or 0
-
-    return shots1, shots2
-
-# --- LOOP PRINCIPAL ---
-while True:
     try:
-        jogos = jogos_ao_vivo()
+        requests.get(url, timeout=10)
+    except:
+        pass
+
+
+def pegar_odds(fixture_id):
+
+    url = f"https://v3.football.api-sports.io/odds?fixture={fixture_id}"
+
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=10).json()
+
+        bookmakers = r["response"][0]["bookmakers"]
+
+        for b in bookmakers:
+
+            if b["name"] == "Bet365":
+
+                for bet in b["bets"]:
+
+                    if bet["name"] == "Match Winner":
+
+                        odds = bet["values"]
+
+                        home_odd = float(odds[0]["odd"])
+                        away_odd = float(odds[2]["odd"])
+
+                        return home_odd, away_odd
+
+    except:
+        return None, None
+
+    return None, None
+
+
+print("🤖 Robô favorito perdendo iniciado")
+
+while True:
+
+    try:
+
+        url = "https://v3.football.api-sports.io/fixtures?live=all"
+
+        response = requests.get(url, headers=HEADERS, timeout=15).json()
+
+        jogos = response.get("response", [])
+
+        print(f"📊 {len(jogos)} jogos ao vivo")
 
         for jogo in jogos:
 
             fixture_id = jogo["fixture"]["id"]
+
+            if fixture_id in jogos_alertados:
+                continue
+
+            minuto = jogo["fixture"]["status"]["elapsed"] or 0
+
             home = jogo["teams"]["home"]["name"]
             away = jogo["teams"]["away"]["name"]
-            minuto = jogo["fixture"]["status"]["elapsed"]
 
-            shots1, shots2 = estatisticas_jogo(fixture_id)
+            g_home = jogo["goals"]["home"] or 0
+            g_away = jogo["goals"]["away"] or 0
 
-            if (shots1 >= ALERTA_CHUTES or shots2 >= ALERTA_CHUTES) and fixture_id not in jogos_alertados:
+            liga = jogo["league"]["name"]
+            pais = jogo["league"]["country"]
 
-                mensagem = (
-                    f"🚨 ALERTA DE PRESSÃO\n\n"
-                    f"{home} x {away}\n"
-                    f"Minuto: {minuto}\n\n"
-                    f"Chutes no gol:\n"
-                    f"{home}: {shots1}\n"
-                    f"{away}: {shots2}"
-                )
+            home_odd, away_odd = pegar_odds(fixture_id)
 
-                enviar_telegram(mensagem)
+            if home_odd is None:
+                continue
+
+            favorito = None
+
+            if home_odd <= 1.60:
+                favorito = "home"
+
+            elif away_odd <= 1.60:
+                favorito = "away"
+
+            if favorito == "home" and g_home < g_away:
+
+                msg = f"""
+🚨 FAVORITO PERDENDO
+
+🌍 {pais} | {liga}
+
+🏟️ {home} x {away}
+
+⏱️ {minuto}'
+⚽ Placar: {g_home} x {g_away}
+
+⭐ Favorito: {home}
+Odd pré-jogo: {home_odd}
+
+https://www.bet365.com/#/IP/
+"""
+
+                enviar_telegram(msg)
 
                 jogos_alertados.add(fixture_id)
 
-        time.sleep(30)
+            if favorito == "away" and g_away < g_home:
+
+                msg = f"""
+🚨 FAVORITO PERDENDO
+
+🌍 {pais} | {liga}
+
+🏟️ {home} x {away}
+
+⏱️ {minuto}'
+⚽ Placar: {g_home} x {g_away}
+
+⭐ Favorito: {away}
+Odd pré-jogo: {away_odd}
+
+https://www.bet365.com/#/IP/
+"""
+
+                enviar_telegram(msg)
+
+                jogos_alertados.add(fixture_id)
 
     except Exception as e:
+
         print("Erro:", e)
-        time.sleep(30)
+
+    time.sleep(120)
