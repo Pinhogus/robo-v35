@@ -22,11 +22,13 @@ def pegar_jogos():
 
     jogos = []
 
-    tabela = soup.find("table", {"id": "btable"})
+    tabelas = soup.find_all("table")
 
-    if not tabela:
-        print("Erro ao encontrar tabela")
+    if not tabelas:
+        print("Nenhuma tabela encontrada")
         return jogos
+
+    tabela = tabelas[0]  # pega a primeira disponível
 
     for row in tabela.find_all("tr"):
         cols = row.find_all("td")
