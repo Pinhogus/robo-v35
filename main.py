@@ -8,12 +8,12 @@ from telegram.constants import ParseMode
 
 # =========================
 
-# CONFIG — preencha aqui
+# CONFIG - preencha aqui
 
 # =========================
 
-TOKEN = "8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE"
-CHAT_ID = "1027866106"
+TOKEN = “8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE”
+CHAT_ID = “1027866106”
 
 # =========================
 
@@ -377,7 +377,7 @@ return msg
 
 # =========================
 
-# 7. ENVIAR TELEGRAM — FIX: async/await correto
+# 7. ENVIAR TELEGRAM - FIX: async/await correto
 
 # =========================
 
