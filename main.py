@@ -360,4 +360,4 @@ def ciclo():
         if j.get("tournament", {}).get("uniqueTournament", {}).get("id") in ids_ligas
     ]
 
-    print(f"  → {len(filtrados)} jogos nas ligas mon
+    print(f"  → {len(filtrados)} jogos nas ligas monitoradas")
