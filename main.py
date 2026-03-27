@@ -12,8 +12,8 @@ from telegram.constants import ParseMode
 
 # =========================
 
-TOKEN = “8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE”
-CHAT_ID = “1027866106”
+sed -i "s|TOKEN = .*|TOKEN = \"8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE\"|" main.py
+sed -i "s|CHAT_ID = .*|CHAT_ID = \"1027866106\"|" main.py
 
 # =========================
 
