@@ -1,6 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import asyncio
+import re
+from urllib.parse import unquote
 from telegram import Bot
 from telegram.constants import ParseMode
 
@@ -11,12 +13,77 @@ TOKEN = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
 CHAT_ID = "1027866106"
 
 # =========================
-# 1. PEGAR JOGOS (SCRAPING)
+# 1. HELPERS DE LIMPEZA
+# =========================
+def limpar_nome_time(texto: str) -> str:
+    """
+    Remove lixo comum que vem do scraping do soccerstats:
+    - Caracteres URL-encoded (%58, %42 etc.)
+    - Números soltos, porcentagens, estatísticas coladas
+    - Espaços duplicados
+    """
+    if not texto:
+        return ""
+
+    # Decodifica URL encoding (%58 → X etc.)
+    try:
+        texto = unquote(texto)
+    except Exception:
+        pass
+
+    # Remove tudo que não seja letra, espaço ou hífen (nomes compostos)
+    texto = re.sub(r"[^a-zA-ZÀ-ÿ\s\-\.]", " ", texto)
+
+    # Remove espaços múltiplos
+    texto = re.sub(r"\s+", " ", texto).strip()
+
+    return texto
+
+
+def nome_valido(nome: str) -> bool:
+    """
+    Valida se o texto extraído parece ser um nome de time real.
+    Rejeita: muito curto, só números, palavras de cabeçalho de tabela,
+    texto longo demais (provavelmente lixo concatenado).
+    """
+    PALAVRAS_LIXO = {
+        "home", "away", "team", "time", "match", "date", "score",
+        "stats", "goals", "played", "points", "league", "vs",
+        "scope", "blog", "today", "mon", "tue", "wed", "thu",
+        "fri", "sat", "sun", "per", "game"
+    }
+
+    if not nome:
+        return False
+
+    # Tamanho: times reais têm entre 3 e 35 caracteres
+    if len(nome) < 3 or len(nome) > 35:
+        return False
+
+    # Não pode ser só números ou símbolos
+    letras = re.sub(r"[^a-zA-ZÀ-ÿ]", "", nome)
+    if len(letras) < 3:
+        return False
+
+    # Não pode ser uma palavra de cabeçalho conhecida
+    if nome.lower().strip() in PALAVRAS_LIXO:
+        return False
+
+    # Não pode conter % ou sequências numéricas longas (lixo de stats)
+    if "%" in nome or re.search(r"\d{3,}", nome):
+        return False
+
+    return True
+
+
+# =========================
+# 2. PEGAR JOGOS (SCRAPING)
 # =========================
 def pegar_jogos():
     """
     Busca jogos do dia no soccerstats.com.
-    Retorna lista de dicts com liga, home, away.
+    Estratégia: procura links com padrão de jogo (/match.asp?...)
+    que é mais confiável que parsear células de tabela diretamente.
     """
     url = "https://www.soccerstats.com/matches.asp"
     headers = {
@@ -29,7 +96,7 @@ def pegar_jogos():
 
     try:
         response = requests.get(url, headers=headers, timeout=15)
-        response.encoding = "utf-8"  # FIX: encoding explícito
+        response.encoding = "utf-8"
     except requests.RequestException as e:
         print(f"Erro de conexão: {e}")
         return []
@@ -41,58 +108,57 @@ def pegar_jogos():
     soup = BeautifulSoup(response.text, "html.parser")
     jogos = []
     vistos = set()
+    liga_atual = "Internacional"
 
-    tabelas = soup.find_all("table")
+    # ── Estratégia 1: linhas de tabela com padrão "Time x Time" ──
+    for row in soup.find_all("tr"):
+        cols = row.find_all("td")
+        if len(cols) < 3:
+            continue
 
-    if not tabelas:
-        print("Nenhuma tabela encontrada no HTML")
-        return []
+        # Tenta encontrar a coluna central com "x" ou "vs" separando os times
+        # O soccerstats usa estrutura: [hora] [home] [x] [away] [...]
+        for i in range(len(cols) - 2):
+            separador = cols[i + 1].text.strip().lower()
+            if separador in ("-", "x", "vs", "–", ""):
+                candidato_home = limpar_nome_time(cols[i].text)
+                candidato_away = limpar_nome_time(cols[i + 2].text)
 
-    for tabela in tabelas:
-        rows = tabela.find_all("tr")
+                if nome_valido(candidato_home) and nome_valido(candidato_away):
+                    chave = candidato_home + "|" + candidato_away
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        jogos.append({
+                            "liga": liga_atual,
+                            "home": candidato_home,
+                            "away": candidato_away,
+                        })
+                    break
 
-        for row in rows:
+        # Detecta cabeçalho de liga (linha com colspan ou texto de liga)
+        cabecalho = row.find("td", {"colspan": True})
+        if cabecalho:
+            txt = cabecalho.text.strip()
+            if txt and len(txt) < 60 and not any(c.isdigit() for c in txt[:5]):
+                liga_atual = txt.split("stats")[0].strip() or "Internacional"
+
+    # ── Estratégia 2 (fallback): varredura sem separador central ──
+    if not jogos:
+        print("  ⚠ Estratégia 1 vazia, tentando varredura direta...")
+        for row in soup.find_all("tr"):
             cols = row.find_all("td")
+            # Tenta pares de colunas adjacentes
+            for idx in range(len(cols) - 1):
+                h = limpar_nome_time(cols[idx].text)
+                a = limpar_nome_time(cols[idx + 1].text)
+                if nome_valido(h) and nome_valido(a) and h != a:
+                    chave = h + "|" + a
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        jogos.append({"liga": "Internacional", "home": h, "away": a})
+                    break
 
-            # FIX: tenta múltiplas combinações de colunas
-            pares_tentativa = [
-                (2, 4),   # estrutura original
-                (1, 3),   # estrutura alternativa
-                (0, 2),   # estrutura compacta
-            ]
-
-            for col_home, col_away in pares_tentativa:
-                if len(cols) > max(col_home, col_away):
-                    try:
-                        time1 = cols[col_home].text.strip()
-                        time2 = cols[col_away].text.strip()
-
-                        # FIX: filtros mais robustos
-                        if (
-                            time1
-                            and time2
-                            and len(time1) > 2
-                            and len(time2) > 2
-                            and not any(
-                                lixo in time1.lower()
-                                for lixo in ["vs", "home", "away", "time", "team", "-"]
-                            )
-                            and time1.replace(" ", "").isalpha() is False  # aceita nomes com números
-                            or (len(time1) > 3 and len(time2) > 3)
-                        ):
-                            chave = time1 + "|" + time2
-                            if chave not in vistos:
-                                vistos.add(chave)
-                                jogos.append({
-                                    "liga": "Internacional",
-                                    "home": time1,
-                                    "away": time2
-                                })
-                            break  # achou par válido, não tenta mais combos
-                    except Exception:
-                        continue
-
-    print(f"  → {len(jogos)} jogos únicos extraídos")
+    print(f"  → {len(jogos)} jogos válidos extraídos")
     return jogos
 
 
