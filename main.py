@@ -7,8 +7,8 @@ from datetime import datetime
 #   ⚙️  CONFIGURAÇÕES
 # ═══════════════════════════════════════════════
 
-TELEGRAM_TOKEN     = "SEU_TOKEN_AQUI"
-CHAT_ID            = "SEU_CHAT_ID_AQUI"
+TELEGRAM_TOKEN     = "8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY"
+CHAT_ID            = "1027866106"
 INTERVALO_MINUTOS  = 2
 
 # ── Limiares do motor de scoring ──────────────
