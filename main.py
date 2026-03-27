@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 
 # =========================
 
-TOKEN = “8418160843:AAElU7KJsdQ0MtzhP8-EFMLNjX4zvIjEWSY”
+TOKEN = “8418160843:AAElU7KJsdQ0MtzhP8EFMLNjX4zvIjEWSY”
 CHAT_ID = “1027866106”
 
 # =========================
