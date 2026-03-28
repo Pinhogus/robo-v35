@@ -1,14 +1,12 @@
 import requests
 import asyncio
+import os
 from datetime import date
 from telegram import Bot
-from telegram.constants import ParseMode
 
-# CONFIG
-
-TOKEN = “8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE”
-CHAT_ID = “1027866106”
-FOOTBALL_API_KEY = “d7381d52cb3b4063b5192623a0c6720d”
+TOKEN = os.environ.get(“TOKEN”, “”)
+CHAT_ID = os.environ.get(“CHAT_ID”, “”)
+FOOTBALL_API_KEY = os.environ.get(“FOOTBALL_API_KEY”, “”)
 
 def pegar_jogos():
 hoje = date.today().strftime(”%Y-%m-%d”)
@@ -18,12 +16,8 @@ headers = {“X-Auth-Token”: FOOTBALL_API_KEY}
 ```
 try:
     response = requests.get(url, headers=headers, timeout=15)
-except requests.RequestException as e:
+except Exception as e:
     print("Erro de conexao: " + str(e))
-    return []
-
-if response.status_code == 403:
-    print("Chave de API invalida. Verifique FOOTBALL_API_KEY.")
     return []
 
 if response.status_code != 200:
@@ -39,17 +33,15 @@ for partida in dados.get("matches", []):
         liga_code = partida["competition"]["code"]
         home = partida["homeTeam"].get("shortName") or partida["homeTeam"].get("name", "")
         away = partida["awayTeam"].get("shortName") or partida["awayTeam"].get("name", "")
-
         if not home or not away:
             continue
-
         jogos.append({
             "liga": liga_nome,
             "liga_code": liga_code,
             "home": home,
             "away": away,
         })
-    except (KeyError, TypeError):
+    except Exception:
         continue
 
 print("Jogos encontrados: " + str(len(jogos)))
@@ -124,8 +116,8 @@ return “Nenhum jogo encontrado hoje.”
 ```
 msg = "PRE-LISTA DO DIA\n"
 msg += "--------------------\n\n"
-
 msg += "TOP UNDER 2.5\n"
+
 if top_under:
     for i, j in enumerate(top_under, 1):
         msg += str(i) + ". " + j["home"] + " x " + j["away"] + "\n"
@@ -143,7 +135,6 @@ else:
 
 msg += "\n--------------------\n"
 msg += "Use como referencia, nao como garantia."
-
 return msg
 ```
 
