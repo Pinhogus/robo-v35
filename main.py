@@ -1,8 +1,6 @@
 import requests
-from bs4 import BeautifulSoup
 import asyncio
-import re
-from urllib.parse import unquote
+from datetime import date
 from telegram import Bot
 from telegram.constants import ParseMode
 
@@ -12,183 +10,76 @@ from telegram.constants import ParseMode
 
 # =========================
 
-sed -i "s|TOKEN = .*|TOKEN = \"8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE\"|" main.py
-sed -i "s|CHAT_ID = .*|CHAT_ID = \"1027866106\"|" main.py
+TOKEN = “8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE”
+CHAT_ID = “1027866106”
+
+# Cadastro GRATUITO em: https://www.football-data.org/client/register
+
+# Sua chave aparece no dashboard logo apos o cadastro (email + senha)
+
+FOOTBALL_API_KEY = “d7381d52cb3b4063b5192623a0c6720d”
 
 # =========================
 
-# 1. HELPERS DE LIMPEZA
+# 1. PEGAR JOGOS (API football-data.org)
 
 # =========================
 
-# Palavras que NUNCA aparecem em nomes de times de futebol
+# Ligas disponíveis no plano GRATUITO:
 
-PALAVRAS_LIXO = {
-“home”, “away”, “team”, “match”, “date”, “score”, “stats”, “goals”,
-“played”, “points”, “league”, “scope”, “blog”, “today”, “per”, “game”,
-“cookie”, “usage”, “options”, “mobile”, “app”, “privacy”, “policy”,
-“settings”, “accept”, “decline”, “and”, “the”, “for”, “with”, “this”,
-“that”, “from”, “page”, “site”, “data”, “info”, “news”, “more”, “all”,
-“live”, “table”, “fixtures”, “results”, “standing”, “tip”, “bet”,
-“odds”, “prediction”, “analysis”, “preview”, “report”, “update”,
-}
+# PL=Premier League, PD=La Liga, BL1=Bundesliga, SA=Serie A,
 
-# Palavras que frequentemente aparecem em nomes de times reais
+# FL1=Ligue 1, DED=Eredivisie, BSA=Brasileirao, PPL=Primeira Liga
 
-# (usadas como critério positivo de validação)
-
-SUFIXOS_TIME = {
-“fc”, “cf”, “sc”, “ac”, “bc”, “bk”, “sk”, “fk”, “if”, “ff”,
-“united”, “city”, “town”, “rovers”, “wanderers”, “athletic”,
-“albion”, “rangers”, “county”, “villa”, “palace”, “orient”,
-“wednesday”, “thursday”, “friday”, “saturday”,  # times com dia no nome
-“hotspur”, “arsenal”, “chelsea”, “liverpool”,
-}
-
-def limpar_nome_time(texto: str) -> str:
-“”“Limpa e normaliza texto extraído de célula HTML.”””
-if not texto:
-return “”
-try:
-texto = unquote(texto)
-except Exception:
-pass
-# Remove tudo que não seja letra, espaço, hífen ou ponto
-texto = re.sub(r”[^a-zA-ZÀ-ÿ\s-.']”, “ “, texto)
-texto = re.sub(r”\s+”, “ “, texto).strip()
-return texto
-
-def nome_valido(nome: str) -> bool:
-“””
-Valida se o texto parece um nome de clube de futebol.
-Critérios rígidos para eliminar lixo de UI/cookie/cabeçalho.
-“””
-if not nome:
-return False
-
-```
-# Tamanho: times reais têm entre 3 e 30 chars
-if len(nome) < 3 or len(nome) > 30:
-    return False
-
-# Precisa ter ao menos 3 letras (não só símbolos)
-letras = re.sub(r"[^a-zA-ZÀ-ÿ]", "", nome)
-if len(letras) < 3:
-    return False
-
-palavras = nome.lower().split()
-
-# Rejeita se QUALQUER palavra for lixo conhecido e o nome for curto
-# (nomes compostos reais podem ter "and" mas são raros)
-if len(palavras) <= 3:
-    for p in palavras:
-        if p in PALAVRAS_LIXO:
-            return False
-
-# Rejeita frases longas (4+ palavras sem sufixo de time)
-if len(palavras) >= 4:
-    tem_sufixo = any(p in SUFIXOS_TIME for p in palavras)
-    if not tem_sufixo:
-        return False
-
-# Rejeita se contém % ou números de 3+ dígitos (lixo de stats)
-if "%" in nome or re.search(r"\d{3,}", nome):
-    return False
-
-# Rejeita se começa com letra minúscula (times sempre têm maiúscula)
-if nome[0].islower():
-    return False
-
-return True
-```
-
-# =========================
-
-# 2. PEGAR JOGOS (SCRAPING)
-
-# =========================
+LIGAS_GRATIS = [“PL”, “PD”, “BL1”, “SA”, “FL1”, “DED”, “BSA”, “PPL”]
 
 def pegar_jogos():
 “””
-Busca jogos do dia no soccerstats.com.
-Estratégia principal: procura links internos do tipo /ltable.asp?league=X
-que o soccerstats usa para cada partida listada.
-Fallback: varredura por separador ‘x’ entre células.
+Busca jogos do dia via API football-data.org (plano gratuito).
+Retorna lista de dicts com liga, home, away e stats reais.
 “””
-url = “https://www.soccerstats.com/matches.asp”
-headers = {
-“User-Agent”: (
-“Mozilla/5.0 (Windows NT 10.0; Win64; x64) “
-“AppleWebKit/537.36 (KHTML, like Gecko) “
-“Chrome/120.0.0.0 Safari/537.36”
-)
-}
+hoje = date.today().strftime(”%Y-%m-%d”)
+url = f”https://api.football-data.org/v4/matches?dateFrom={hoje}&dateTo={hoje}”
+headers = {“X-Auth-Token”: FOOTBALL_API_KEY}
 
 ```
 try:
     response = requests.get(url, headers=headers, timeout=15)
-    response.encoding = "utf-8"
 except requests.RequestException as e:
-    print(f"Erro de conexão: {e}")
+    print(f"Erro de conexao: {e}")
+    return []
+
+if response.status_code == 403:
+    print("Chave de API invalida ou sem permissao. Verifique FOOTBALL_API_KEY.")
     return []
 
 if response.status_code != 200:
-    print(f"Erro HTTP {response.status_code} ao acessar site")
+    print(f"Erro HTTP {response.status_code}: {response.text[:200]}")
     return []
 
-soup = BeautifulSoup(response.text, "html.parser")
+dados = response.json()
 jogos = []
-vistos = set()
 
-# ── Estratégia principal: busca linhas que tenham link de time ──
-# O soccerstats marca cada time com um link interno (href com teamstats.asp ou similar)
-for row in soup.find_all("tr"):
-    links = row.find_all("a", href=True)
-    times_na_linha = []
+for partida in dados.get("matches", []):
+    try:
+        liga_code = partida["competition"]["code"]
+        liga_nome = partida["competition"]["name"]
+        home = partida["homeTeam"]["shortName"] or partida["homeTeam"]["name"]
+        away = partida["awayTeam"]["shortName"] or partida["awayTeam"]["name"]
 
-    for link in links:
-        href = link.get("href", "")
-        texto = limpar_nome_time(link.text)
+        if not home or not away:
+            continue
 
-        # Links de times costumam apontar para ltable.asp ou teamstats.asp
-        if any(p in href for p in ["ltable", "teamstats", "team", "latest"]):
-            if nome_valido(texto):
-                times_na_linha.append(texto)
+        jogos.append({
+            "liga": liga_nome,
+            "liga_code": liga_code,
+            "home": home,
+            "away": away,
+        })
+    except (KeyError, TypeError):
+        continue
 
-    # Uma linha válida de jogo tem exatamente 2 times
-    if len(times_na_linha) == 2:
-        home, away = times_na_linha[0], times_na_linha[1]
-        chave = home + "|" + away
-        if chave not in vistos:
-            vistos.add(chave)
-
-            # Tenta detectar a liga pelo contexto próximo
-            liga = "Internacional"
-            prev = row.find_previous("td", {"colspan": True})
-            if prev:
-                txt_liga = prev.text.strip().split("stats")[0].strip()
-                if txt_liga and len(txt_liga) < 50:
-                    liga = txt_liga
-
-            jogos.append({"liga": liga, "home": home, "away": away})
-
-# ── Fallback: separador "x" entre células ──
-if not jogos:
-    print("  ⚠ Estratégia de links vazia, tentando separador 'x'...")
-    for row in soup.find_all("tr"):
-        cols = row.find_all("td")
-        for i in range(1, len(cols) - 1):
-            sep = cols[i].text.strip().lower()
-            if sep == "x":
-                h = limpar_nome_time(cols[i - 1].text)
-                a = limpar_nome_time(cols[i + 1].text)
-                if nome_valido(h) and nome_valido(a):
-                    chave = h + "|" + a
-                    if chave not in vistos:
-                        vistos.add(chave)
-                        jogos.append({"liga": "Internacional", "home": h, "away": a})
-
-print(f"  → {len(jogos)} jogos válidos extraídos")
+print(f"  → {len(jogos)} jogos encontrados para hoje ({hoje})")
 return jogos
 ```
 
