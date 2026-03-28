@@ -10,14 +10,14 @@ from telegram.constants import ParseMode
 
 # =========================
 
-TOKEN = “8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE”
-CHAT_ID = “1027866106”
+TOKEN = "8418160843:AAGnbicIYPV-MxZQvZcF-HbpOTmJcrx-qLE"
+CHAT_ID = "1027866106"
 
 # Cadastro GRATUITO em: https://www.football-data.org/client/register
 
 # Sua chave aparece no dashboard logo apos o cadastro (email + senha)
 
-FOOTBALL_API_KEY = “d7381d52cb3b4063b5192623a0c6720d”
+FOOTBALL_API_KEY = "d7381d52cb3b4063b5192623a0c6720d"
 
 # =========================
 
